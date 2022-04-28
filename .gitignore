@@ -1,6 +1,6 @@
 # Default ignored files
 kotlin/shelf/
-kotlin/workspace.xml
+workspace.xml
 
 kotlin/out/*
 kotlin/lib/*
@@ -17,31 +17,13 @@ kotlin/.idea/modules.xml
 kotlin/.idea/jarRepositories.xml
 kotlin/.idea/compiler.xml
 kotlin/.idea/libraries/
-kotlin/*.iws
-kotlin/*.iml
-kotlin/*.ipr
+*.iws
+*.iml
+*.ipr
 kotlin/out/
 kotlin/!**/src/main/**/out/
 kotlin/!**/src/test/**/out/
 
-### Eclipse ###
-kotlin/.apt_generated
-kotlin/.classpath
-kotlin/.factorypath
-kotlin/.project
-kotlin/.settings
-kotlin/.springBeans
-kotlin/.sts4-cache
-kotlin/bin/
-kotlin/!**/src/main/**/bin/
-kotlin/!**/src/test/**/bin/
-
-### NetBeans ###
-kotlin//nbproject/private/
-kotlin//nbbuild/
-kotlin//dist/
-kotlin//nbdist/
-kotlin//.nb-gradle/
 
 ### VS Code ###
 kotlin/.vscode/

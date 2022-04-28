@@ -9,7 +9,7 @@ import java.io.PrintWriter
 import java.net.ServerSocket
 import java.net.Socket
 
-suspend fun runServer(clientChannel: Channel<Socket>) = coroutineScope {
+suspend fun runServer(opChannel: Channel<Operation>) = coroutineScope {
     launch(Dispatchers.Default) {
         val server = ServerSocket(3000)
         println("Listening on port 3000")
@@ -17,7 +17,7 @@ suspend fun runServer(clientChannel: Channel<Socket>) = coroutineScope {
         while(true) {
             val client = server.accept()
             println("Sending to channel: $client")
-            clientChannel.send(client)
+            launch { handleClient(client, opChannel) }
         }
     }
 }
@@ -56,17 +56,10 @@ suspend fun handleClient(client: Socket, channel: Channel<Operation>) = coroutin
 data class Operation(val key: String, val value: String?, val chan: Channel<String?>)
 
 fun main() {
-    val newClientChannel = Channel<Socket>(UNLIMITED)
     val opChannel = Channel<Operation>(UNLIMITED)
     val state = mutableMapOf<String, String>()
 
-    GlobalScope.launch(Dispatchers.Default) {
-        while(true) {
-            val client = newClientChannel.receive()
-            launch { handleClient(client, opChannel) }
-        }
-    }
-    GlobalScope.launch(Dispatchers.Default) {
+    GlobalScope.launch {
         while(true) {
             val op = opChannel.receive()
             if (op.value == null) {
@@ -81,6 +74,6 @@ fun main() {
         }
     }
     runBlocking {
-        runServer(newClientChannel)
+        runServer(opChannel)
     }
 }
