@@ -79,14 +79,40 @@ fn main() {
 
     let mut max_fd = raw_fd;
 
-    let mut db: HashMap<&str, i32> = HashMap::from([("abc", 123), ("def", 456)]);
+    let mut db: HashMap<String, String> = HashMap::from([("abc".to_string(), "123".to_string()), ("def".to_string(), "456".to_string())]);
+
+    let mut client1: Option<TcpStream> = None;
+    let mut client3: Option<TcpStream> = None;
+    let mut client2: Option<TcpStream> = None;
 
     loop {
         streams.clear();
         let mut new_client: bool = false;
         fd_set.set(raw_fd);
-        for s in vec.into_iter() {
+        for s in vec.iter() {
+            println!("In vec: {}", s.as_raw_fd());
             fd_set.set(s.as_raw_fd());
+        }
+        match client1 {
+            Some(s) => {
+                fd_set.set(s.as_raw_fd());
+                client1 = Some(s);
+            }
+            None => {}
+        }
+        match client2 {
+            Some(s) => {
+                fd_set.set(s.as_raw_fd());
+                client2 = Some(s);
+            }
+            None => {}
+        }
+        match client3 {
+            Some(s) => {
+                fd_set.set(s.as_raw_fd());
+                client3 = Some(s);
+            }
+            None => {}
         }
         match select(
             max_fd + 1,
@@ -108,31 +134,75 @@ fn main() {
                         if i == raw_fd {
                             new_client = true
                         }
-                        for v in vec.iter() {
-                            if i == v.as_raw_fd() {
-                                println!("Found stream");
-                                streams.push(&v);
-                            }
-                        }
+                        // for v in vec.iter() {
+                        //     if i == v.as_raw_fd() {
+                        //         println!("Found stream");
+                        //         streams.push(&v);
+                        //     }
+                        // }
                     }
-                    fd_set.clear(i);
+                    // fd_set.clear(i);
                 }
                 if new_client {
                     let stream = listener.accept().unwrap().0;
-                    stream_ref = &stream;
                     let stream_fd = stream.as_raw_fd();
+                    if client1.is_none() {
+                        client1 = Some(stream)
+                    } else if client2.is_none() {
+                        client2 = Some(stream)
+                    } else if client3.is_none() {
+                        client3 = Some(stream)
+                    } else {
+                        println!("Reached max limit of connected clients")
+                    }
                     fd_set.set(stream_fd);
                     if stream_fd > max_fd {
                         max_fd = stream_fd;
                     }
                     println!("stream: {}", stream_fd);
                     println!("new max: {}", max_fd);
-                    vec.push(stream);
+                    // vec.push(stream);
                 } else {
                     println!("Handling a request from a client");
-                    for s in streams.iter() {
-                        let tuple = handle_connection(s, db);
-                        db = tuple.1;
+                    // for s in vec.iter() {
+                    match client1 {
+                        Some(s) => {
+                            if fd_set.is_set(s.as_raw_fd()) {
+                                fd_set.clear(s.as_raw_fd());
+                                let tuple = handle_connection(s, db);
+                                db = tuple.1;
+                                client1 = Some(tuple.0);
+                            } else {
+                                client1 = Some(s)
+                            }
+                        }
+                        None => {}
+                    }
+                    match client2 {
+                        Some(s) => {
+                            if fd_set.is_set(s.as_raw_fd()) {
+                                fd_set.clear(s.as_raw_fd());
+                                let tuple = handle_connection(s, db);
+                                db = tuple.1;
+                                client2 = Some(tuple.0);
+                            } else {
+                                client2 = Some(s);
+                            }
+                        }
+                        None => {}
+                    }
+                    match client3 {
+                        Some(s) => {
+                            if fd_set.is_set(s.as_raw_fd()) {
+                                fd_set.clear(s.as_raw_fd());
+                                let tuple = handle_connection(s, db);
+                                db = tuple.1;
+                                client3 = Some(tuple.0);
+                            } else {
+                                client3 = Some(s);
+                            }
+                        }
+                        None => {}
                     }
                 }
             }
@@ -144,9 +214,9 @@ fn main() {
 }
 
 fn handle_connection<'a>(
-    mut stream: &'a TcpStream,
-    mut db: HashMap<&'a str, i32>,
-) -> (&'a TcpStream, HashMap<&'a str, i32>) {
+    mut stream: TcpStream,
+    mut db: HashMap<String, String>,
+) -> (TcpStream, HashMap<String, String>) {
     let mut buffer = [0; 1024];
     stream.read(&mut buffer).unwrap();
     let request = String::from_utf8_lossy(&buffer);
@@ -155,6 +225,7 @@ fn handle_connection<'a>(
     //     println!("b: {}", b);
     // }
     let s: String;
+    // let new_db = db.clone();
 
     let response = if request.starts_with("GET") {
         let parts: Vec<&str> = request.split(|c| char::is_ascii_whitespace(&c)).collect();
@@ -163,25 +234,42 @@ fn handle_connection<'a>(
             println!("key.len: '{}'", parts[1].len());
             let key = parts[1];
             println!("key=abc: {}", key == "abc");
-            for (key, value) in &db {
-                println!("'{}': '{}'", key, value);
-            }
+            // for (key, value) in db {
+            //     println!("'{}': '{}'", key, value);
+            // }
             s = match db.get(key) {
-                Some(res) => res,
-                None => &0,
-            }
-            .to_string();
+                Some(res) => {
+                    // s = Some(res);
+                    res.to_string()
+                },
+                None => "".to_string(),
+            };
             println!("s: {}", s);
-            &s
+            s
         } else {
-            "N/A\n"
+            "N/A\n".to_string()
         }
     } else if request.starts_with("SET") {
-        let parts = request.split(" ");
+        let parts: Vec<&str> = request.split(|c| char::is_ascii_whitespace(&c)).collect();
         println!("SET request");
-        "OK\n"
+        if parts.len() > 2 {
+            println!("key: '{}'", parts[1]);
+            println!("key.len: '{}'", parts[1].len());
+            let key = parts[1];
+            let value = parts[2];
+            println!("key=abc: {}", key == "abc");
+            // for (key, value) in db {
+            //     println!("'{}': '{}'", key, value);
+            // }
+            db.insert(key.to_string(), value.to_string());
+            // db.insert(key.clone().to_owned().as_str(), value.parse::<i32>().unwrap().clone());
+            // println!("s: {}", s);
+            "OK\n".to_string()
+        } else {
+            "N/A\n".to_string()
+        }
     } else {
-        "OK\n"
+        "OK\n".to_string()
     };
 
     stream.write(response.as_bytes()).unwrap();
