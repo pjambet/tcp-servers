@@ -31,3 +31,6 @@ kotlin/.vscode/
 
 ### Mac OS ###
 kotlin/.DS_Store
+
+### Rust
+rust/target/**

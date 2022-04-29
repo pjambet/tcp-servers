@@ -13,6 +13,9 @@ import java.net.ServerSocket
 import java.net.Socket
 
 suspend fun runServer(opChannel: Channel<Operation>) = coroutineScope {
+    val coroutineExceptionHandler = CoroutineExceptionHandler { _, exception ->
+        log.error("Handle $exception in CoroutineExceptionHandler")
+    }
     launch(Dispatchers.IO) {
         val server = ServerSocket(3000)
         log.info("Listening on port 3000")
@@ -20,12 +23,15 @@ suspend fun runServer(opChannel: Channel<Operation>) = coroutineScope {
         while(true) {
             val client = server.accept()
             log.info("Starting handler for: $client")
-            launch { handleClient(client, opChannel) }
+            supervisorScope {
+                launch { handleClient(client, opChannel) }
+            }
+            log.info("Launched")
         }
     }
 }
 
-suspend fun handleClient(client: Socket, channel: Channel<Operation>) = coroutineScope {
+suspend fun handleClient(client: Socket, channel: Channel<Operation>) {
     log.info("Handling client: $client")
     while (true) {
         val output = PrintWriter(client.getOutputStream(), true)
@@ -34,7 +40,13 @@ suspend fun handleClient(client: Socket, channel: Channel<Operation>) = coroutin
         if (input == "STOP") {
             client.close()
         } else if (input.startsWith("GET")) {
-            val key = input.split(" ").getOrNull(1)
+            var key: String
+            try {
+                key = input.split(" ")[1]//.getOrNull(1)
+            } catch(e: Exception) {
+//                log.error("ERROR, boooo", e)
+                throw e
+            }
             if (key != null) {
                 val chan = Channel<String?>()
                 channel.send(Operation(key, null, chan))
