@@ -133,11 +133,9 @@ fn handle_connection<'a>(
     stream.read(&mut buffer).unwrap();
     let request = String::from_utf8_lossy(&buffer);
     println!("Received: {}", request);
-    // for b in buffer {
-    //     println!("b: {}", b);
-    // }
+
     let s: String;
-    // let new_db = db.clone();
+
 
     let response = if request.starts_with("GET") {
         let parts: Vec<&str> = request.split(|c| char::is_ascii_whitespace(&c)).collect();
@@ -146,12 +144,9 @@ fn handle_connection<'a>(
             println!("key.len: '{}'", parts[1].len());
             let key = parts[1];
             println!("key=abc: {}", key == "abc");
-            // for (key, value) in db {
-            //     println!("'{}': '{}'", key, value);
-            // }
+
             s = match db.get(key) {
                 Some(res) => {
-                    // s = Some(res);
                     res.to_string()
                 }
                 None => "".to_string(),
@@ -170,12 +165,7 @@ fn handle_connection<'a>(
             let key = parts[1];
             let value = parts[2];
             println!("key=abc: {}", key == "abc");
-            // for (key, value) in db {
-            //     println!("'{}': '{}'", key, value);
-            // }
             db.insert(key.to_string(), value.to_string());
-            // db.insert(key.clone().to_owned().as_str(), value.parse::<i32>().unwrap().clone());
-            // println!("s: {}", s);
             "OK\n".to_string()
         } else {
             "N/A\n".to_string()
