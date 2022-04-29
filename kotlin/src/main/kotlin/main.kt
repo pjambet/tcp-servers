@@ -4,6 +4,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.Channel.Factory.RENDEZVOUS
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -46,7 +47,7 @@ suspend fun handleClient(client: Socket, channel: Channel<Operation>) = coroutin
             val key = input.split(" ").getOrNull(1)
             val value = input.split(" ").getOrNull(2)
             if (key != null && value != null) {
-                val chan = Channel<String?>()
+                val chan = Channel<String?>(RENDEZVOUS)
                 channel.send(Operation(key, value, chan))
                 output.println("OK\n")
             } else {
