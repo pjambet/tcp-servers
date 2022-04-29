@@ -1,5 +1,3 @@
-// extern crate libc;
-
 use std::collections::HashMap;
 use std::io::prelude::*;
 use std::net::{TcpListener, TcpStream};
@@ -72,47 +70,20 @@ fn main() {
     let mut fd_set = FdSet::new();
     let mut vec: Vec<TcpStream> = Vec::new();
     let mut streams: Vec<&TcpStream> = Vec::new();
-    let mut stream_ref: &TcpStream;
 
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
     let raw_fd = listener.as_raw_fd();
 
     let mut max_fd = raw_fd;
 
-    let mut db: HashMap<String, String> = HashMap::from([("abc".to_string(), "123".to_string()), ("def".to_string(), "456".to_string())]);
-
-    let mut client1: Option<TcpStream> = None;
-    let mut client3: Option<TcpStream> = None;
-    let mut client2: Option<TcpStream> = None;
+    let mut db: HashMap<String, String> = HashMap::from([]);
 
     loop {
         streams.clear();
-        let mut new_client: bool = false;
         fd_set.set(raw_fd);
         for s in vec.iter() {
             println!("In vec: {}", s.as_raw_fd());
             fd_set.set(s.as_raw_fd());
-        }
-        match client1 {
-            Some(s) => {
-                fd_set.set(s.as_raw_fd());
-                client1 = Some(s);
-            }
-            None => {}
-        }
-        match client2 {
-            Some(s) => {
-                fd_set.set(s.as_raw_fd());
-                client2 = Some(s);
-            }
-            None => {}
-        }
-        match client3 {
-            Some(s) => {
-                fd_set.set(s.as_raw_fd());
-                client3 = Some(s);
-            }
-            None => {}
         }
         match select(
             max_fd + 1,
@@ -124,85 +95,26 @@ fn main() {
             Ok(res) => {
                 println!("select result: {}", res);
                 println!("raw: {}", raw_fd);
-                let range = std::ops::Range {
-                    start: 0,
-                    end: max_fd + 1,
-                };
-                for i in range {
-                    if (fd_set).is_set(i) {
-                        println!("Socket {} received something!", i);
-                        if i == raw_fd {
-                            new_client = true
-                        }
-                        // for v in vec.iter() {
-                        //     if i == v.as_raw_fd() {
-                        //         println!("Found stream");
-                        //         streams.push(&v);
-                        //     }
-                        // }
-                    }
-                    // fd_set.clear(i);
-                }
-                if new_client {
+
+                if fd_set.is_set(raw_fd) {
                     let stream = listener.accept().unwrap().0;
                     let stream_fd = stream.as_raw_fd();
-                    if client1.is_none() {
-                        client1 = Some(stream)
-                    } else if client2.is_none() {
-                        client2 = Some(stream)
-                    } else if client3.is_none() {
-                        client3 = Some(stream)
-                    } else {
-                        println!("Reached max limit of connected clients")
-                    }
                     fd_set.set(stream_fd);
+                    fd_set.clear(raw_fd);
                     if stream_fd > max_fd {
                         max_fd = stream_fd;
                     }
                     println!("stream: {}", stream_fd);
                     println!("new max: {}", max_fd);
-                    // vec.push(stream);
+                    vec.push(stream);
                 } else {
                     println!("Handling a request from a client");
-                    // for s in vec.iter() {
-                    match client1 {
-                        Some(s) => {
-                            if fd_set.is_set(s.as_raw_fd()) {
-                                fd_set.clear(s.as_raw_fd());
-                                let tuple = handle_connection(s, db);
-                                db = tuple.1;
-                                client1 = Some(tuple.0);
-                            } else {
-                                client1 = Some(s)
-                            }
+                    for s in vec.iter() {
+                        if fd_set.is_set(s.as_raw_fd()) {
+                            fd_set.clear(s.as_raw_fd());
+                            let t = handle_connection(s, db);
+                            db = t;
                         }
-                        None => {}
-                    }
-                    match client2 {
-                        Some(s) => {
-                            if fd_set.is_set(s.as_raw_fd()) {
-                                fd_set.clear(s.as_raw_fd());
-                                let tuple = handle_connection(s, db);
-                                db = tuple.1;
-                                client2 = Some(tuple.0);
-                            } else {
-                                client2 = Some(s);
-                            }
-                        }
-                        None => {}
-                    }
-                    match client3 {
-                        Some(s) => {
-                            if fd_set.is_set(s.as_raw_fd()) {
-                                fd_set.clear(s.as_raw_fd());
-                                let tuple = handle_connection(s, db);
-                                db = tuple.1;
-                                client3 = Some(tuple.0);
-                            } else {
-                                client3 = Some(s);
-                            }
-                        }
-                        None => {}
                     }
                 }
             }
@@ -214,9 +126,9 @@ fn main() {
 }
 
 fn handle_connection<'a>(
-    mut stream: TcpStream,
+    mut stream: &TcpStream,
     mut db: HashMap<String, String>,
-) -> (TcpStream, HashMap<String, String>) {
+) -> HashMap<String, String> {
     let mut buffer = [0; 1024];
     stream.read(&mut buffer).unwrap();
     let request = String::from_utf8_lossy(&buffer);
@@ -241,7 +153,7 @@ fn handle_connection<'a>(
                 Some(res) => {
                     // s = Some(res);
                     res.to_string()
-                },
+                }
                 None => "".to_string(),
             };
             println!("s: {}", s);
@@ -275,5 +187,5 @@ fn handle_connection<'a>(
     stream.write(response.as_bytes()).unwrap();
     stream.flush().unwrap();
 
-    (stream, db)
+    db
 }
