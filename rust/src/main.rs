@@ -69,7 +69,6 @@ pub fn make_timeval(duration: time::Duration) -> libc::timeval {
 fn main() {
     let mut fd_set = FdSet::new();
     let mut vec: Vec<TcpStream> = Vec::new();
-    let mut streams: Vec<&TcpStream> = Vec::new();
 
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
     let raw_fd = listener.as_raw_fd();
@@ -79,7 +78,6 @@ fn main() {
     let mut db: HashMap<String, String> = HashMap::from([]);
 
     loop {
-        streams.clear();
         fd_set.set(raw_fd);
         for s in vec.iter() {
             println!("In vec: {}", s.as_raw_fd());
@@ -109,10 +107,17 @@ fn main() {
                     vec.push(stream);
                 } else {
                     println!("Handling a request from a client");
-                    for s in vec.iter() {
-                        if fd_set.is_set(s.as_raw_fd()) {
-                            fd_set.clear(s.as_raw_fd());
-                            handle_connection(s, &mut db);
+                    let range = std::ops::Range {
+                        start: 0,
+                        end: max_fd + 1,
+                    };
+                    for i in range {
+                        if i != raw_fd && (fd_set).is_set(i) {
+                            fd_set.clear(i);
+                            let stream = vec.iter().find(|s| s.as_raw_fd() == i).unwrap();
+                            handle_connection(stream, &mut db);
+
+                            println!("Socket {} received something!", i);
                         }
                     }
                 }
@@ -124,29 +129,11 @@ fn main() {
     }
 }
 
-// fn change(some_string: &mut String) {
-//     some_string.push_str(", world");
-// }
-
-// fn change2(mut some_string: &String) {
-//     some_string.push_str(", world");
-// }
-
-fn handle_connection(
-    mut stream: &TcpStream,
-    db: &mut HashMap<String, String>,
-) {
+fn handle_connection(mut stream: &TcpStream, db: &mut HashMap<String, String>) {
     let mut buffer = [0; 1024];
     stream.read(&mut buffer).unwrap();
     let request = String::from_utf8_lossy(&buffer);
     println!("Received: {}", request);
-    // let mut x: i32;
-    // let mut y: &i32;
-    // let z: &mut i32;
-
-    stream;
-    let s: String;
-
 
     let response = if request.starts_with("GET") {
         let parts: Vec<&str> = request.split(|c| char::is_ascii_whitespace(&c)).collect();
@@ -156,14 +143,10 @@ fn handle_connection(
             let key = parts[1];
             println!("key=abc: {}", key == "abc");
 
-            s = match db.get(key) {
-                Some(res) => {
-                    res.to_string()
-                }
+            match db.get(key) {
+                Some(res) => res.to_string(),
                 None => "".to_string(),
-            };
-            println!("s: {}", s);
-            s
+            }
         } else {
             "N/A\n".to_string()
         }
