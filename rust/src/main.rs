@@ -112,8 +112,7 @@ fn main() {
                     for s in vec.iter() {
                         if fd_set.is_set(s.as_raw_fd()) {
                             fd_set.clear(s.as_raw_fd());
-                            let t = handle_connection(s, db);
-                            db = t;
+                            handle_connection(s, &mut db);
                         }
                     }
                 }
@@ -125,15 +124,27 @@ fn main() {
     }
 }
 
-fn handle_connection<'a>(
+// fn change(some_string: &mut String) {
+//     some_string.push_str(", world");
+// }
+
+// fn change2(mut some_string: &String) {
+//     some_string.push_str(", world");
+// }
+
+fn handle_connection(
     mut stream: &TcpStream,
-    mut db: HashMap<String, String>,
-) -> HashMap<String, String> {
+    db: &mut HashMap<String, String>,
+) {
     let mut buffer = [0; 1024];
     stream.read(&mut buffer).unwrap();
     let request = String::from_utf8_lossy(&buffer);
     println!("Received: {}", request);
+    // let mut x: i32;
+    // let mut y: &i32;
+    // let z: &mut i32;
 
+    stream;
     let s: String;
 
 
@@ -176,6 +187,4 @@ fn handle_connection<'a>(
 
     stream.write(response.as_bytes()).unwrap();
     stream.flush().unwrap();
-
-    db
 }
