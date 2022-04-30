@@ -68,7 +68,7 @@ pub fn make_timeval(duration: time::Duration) -> libc::timeval {
 
 fn main() {
     let mut fd_set = FdSet::new();
-    let mut vec: Vec<TcpStream> = Vec::new();
+    let mut clients: HashMap<i32, TcpStream> = HashMap::from([]);
 
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
     let raw_fd = listener.as_raw_fd();
@@ -79,9 +79,9 @@ fn main() {
 
     loop {
         fd_set.set(raw_fd);
-        for s in vec.iter() {
-            println!("In vec: {}", s.as_raw_fd());
-            fd_set.set(s.as_raw_fd());
+        for (fd, _) in &clients {
+            println!("In vec: {}", fd);
+            fd_set.set(*fd);
         }
         match select(
             max_fd + 1,
@@ -104,7 +104,7 @@ fn main() {
                     }
                     println!("stream: {}", stream_fd);
                     println!("new max: {}", max_fd);
-                    vec.push(stream);
+                    clients.insert(stream.as_raw_fd(), stream);
                 } else {
                     println!("Handling a request from a client");
                     let range = std::ops::Range {
@@ -114,7 +114,7 @@ fn main() {
                     for i in range {
                         if i != raw_fd && (fd_set).is_set(i) {
                             fd_set.clear(i);
-                            let stream = vec.iter().find(|s| s.as_raw_fd() == i).unwrap();
+                            let stream = clients.get(&i).unwrap();
                             handle_connection(stream, &mut db);
 
                             println!("Socket {} received something!", i);
