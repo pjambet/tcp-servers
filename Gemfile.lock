@@ -3,6 +3,12 @@ GEM
   specs:
     ansi (1.5.0)
     builder (3.2.4)
+    debug (1.5.0)
+      irb (>= 1.3.6)
+      reline (>= 0.2.7)
+    io-console (0.5.11)
+    irb (1.4.1)
+      reline (>= 0.3.0)
     minitest (5.15.0)
     minitest-focus (1.3.1)
       minitest (>= 4, < 6)
@@ -12,12 +18,15 @@ GEM
       minitest (>= 5.0)
       ruby-progressbar
     rake (13.0.6)
+    reline (0.3.1)
+      io-console (~> 0.5)
     ruby-progressbar (1.11.0)
 
 PLATFORMS
   x86_64-darwin-21
 
 DEPENDENCIES
+  debug
   minitest
   minitest-focus
   minitest-reporters
