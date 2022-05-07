@@ -34,3 +34,5 @@ kotlin/.DS_Store
 
 ### Rust
 rust/target/**
+
+go/server

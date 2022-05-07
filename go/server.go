@@ -18,7 +18,7 @@ type op struct {
 }
 
 func handleConnection(channel chan op, c net.Conn) {
-	fmt.Printf("Serving %s\n", c.RemoteAddr().String())
+	// fmt.Printf("Serving %s\n", c.RemoteAddr().String())
 	for {
 		netData, err := bufio.NewReader(c).ReadString('\n')
 		if err != nil {
@@ -27,8 +27,8 @@ func handleConnection(channel chan op, c net.Conn) {
 		}
 
 		temp := strings.TrimSpace(netData)
-
-		if temp == "EXIT" {
+		// fmt.Println(temp)
+		if temp == "STOP" || temp == "QUIT" {
 			break
 		} else if strings.HasPrefix(temp, "GET") {
 			parts := strings.Split(temp, " ")
@@ -85,6 +85,7 @@ func main() {
 					m[res.key] = res.value
 					res.resp <- "OK"
 				} else {
+					// fmt.Println("map:", m)
 					res.resp <- m[res.key]
 				}
 			}
