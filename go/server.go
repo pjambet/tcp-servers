@@ -3,11 +3,9 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"math/rand"
 	"net"
 	"os"
 	"strings"
-	"time"
 )
 
 const MIN = 1
@@ -19,22 +17,18 @@ type op struct {
 	resp  chan string
 }
 
-func random() int {
-	return rand.Intn(MAX-MIN) + MIN
-}
-
 func handleConnection(channel chan op, c net.Conn) {
 	fmt.Printf("Serving %s\n", c.RemoteAddr().String())
 	for {
 		netData, err := bufio.NewReader(c).ReadString('\n')
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("error reading:", err)
 			return
 		}
 
 		temp := strings.TrimSpace(netData)
-		fmt.Println(temp)
-		if temp == "STOP" {
+
+		if temp == "EXIT" {
 			break
 		} else if strings.HasPrefix(temp, "GET") {
 			parts := strings.Split(temp, " ")
@@ -79,7 +73,6 @@ func main() {
 		return
 	}
 	defer l.Close()
-	rand.Seed(time.Now().Unix())
 
 	m := make(map[string]string)
 	channel := make(chan op)
