@@ -1,5 +1,8 @@
 require "socket"
-require "debug"
+require "logger"
+
+LOGGER = Logger.new(STDOUT)
+LOGGER.level = Logger::INFO
 
 def handle_client(db, client)
   request = client.gets
@@ -28,7 +31,7 @@ def handle_client(db, client)
 
   response
 rescue Errno::ECONNRESET => e
-  puts e
+  LOGGER.error e
   client.close
   return nil
 end
@@ -37,7 +40,7 @@ def start_server(port)
   server = TCPServer.new(port)
   clients = []
   db = {}
-  puts "Server started on port: #{ port }"
+  LOGGER.info "Server started on port: #{ port }"
 
   loop do
     connected_clients =
@@ -56,7 +59,7 @@ def start_server(port)
         end
       end
     rescue IOError => e
-      p "error handling socket: #{ e }"
+      LOGGER.error "error handling socket: #{ e }"
     end
   end
 end
