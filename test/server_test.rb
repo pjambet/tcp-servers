@@ -1,7 +1,7 @@
-require_relative './test_helper'
-require 'socket'
-require 'securerandom'
-require 'timeout'
+require_relative "./test_helper"
+require "socket"
+require "securerandom"
+require "timeout"
 
 describe "A server" do
   it "can be connected to" do
@@ -49,18 +49,10 @@ describe "A server" do
     with_server do
       socket = nil
 
-      loop do
-        begin
-          socket = TCPSocket.new('localhost', 7878)
-          break
-        rescue Errno::ECONNREFUSED => _e
-          sleep 0.001
-        end
-      end
 
       pids = 3.times.map do
-        run_in_process do
-          socket = TCPSocket.new('localhost', 7878)
+        fork do
+          socket = TCPSocket.new("localhost", 3000)
           2.times do
             socket.puts "SET #{ SecureRandom.uuid } #{ rand(10) }"
             sleep 0.01
@@ -74,38 +66,38 @@ describe "A server" do
     end
   end
 
-  def run_in_process
-    fork do
-      yield
-    end
-  end
-
   def connect_to_server
-    socket = nil
-    Timeout.timeout(5) do
-      loop do
-        begin
-          socket = TCPSocket.new 'localhost', 7878
-          yield socket
-          break
-        rescue StandardError => e
-          sleep 0.1
-        end
-      end
-    end
+    socket = TCPSocket.new "localhost", 3000
+    yield socket
   ensure
     socket.close if socket
   end
 
   def with_server
-    system("go build -o ./go/server go/server.go") # unless File.exist?("./go/server")
-    pid = spawn("./go/server 7878", STDOUT => "/dev/null")
+    pid = start_server
+    wait_for_server
 
     yield
-
   ensure
-    if pid
-      Process.kill('KILL', pid)
+    Process.kill("KILL", pid) if pid
+  end
+
+  def start_server
+
+    LOG.debug "Starting server with #{SERVER_CONFIG["start"]}"
+    spawn(SERVER_CONFIG["start"], STDOUT => "/dev/null", STDERR => "/dev/null")
+  end
+
+  def wait_for_server
+    Timeout.timeout(1) do
+      loop do
+        begin
+          _socket = TCPSocket.new("localhost", 3000)
+          break
+        rescue Errno::ECONNREFUSED => _e
+          sleep 0.001
+        end
+      end
     end
   end
 end

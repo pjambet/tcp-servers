@@ -22,7 +22,7 @@ def handle_request(client):
         if key in db:
             response = db[key] + "\n"
         else:
-            response = ":(\n"
+            response = "\n"
 
     elif data.startswith("SET") and key:
         value = parts[2]
@@ -31,7 +31,10 @@ def handle_request(client):
             db[key] = value
             response = "OK\n"
         else:
-            response = ":(\n"
+            response = "\n"
+    elif data.startswith("QUIT"):
+        client.close()
+        return
     else:
         response = "N/A\n"
 

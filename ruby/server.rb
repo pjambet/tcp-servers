@@ -17,6 +17,9 @@ def handle_client(db, client)
   elsif request.start_with?("SET") && key && value
     db[key] = value
     response = "OK"
+  elsif request.start_with?("QUIT")
+    client.close
+    return nil
   else
     response = "N/A"
   end
@@ -24,6 +27,10 @@ def handle_client(db, client)
   client.puts(response)
 
   response
+rescue Errno::ECONNRESET => e
+  puts e
+  client.close
+  return nil
 end
 
 def start_server(port)
