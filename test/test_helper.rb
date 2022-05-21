@@ -34,16 +34,16 @@ SERVER_CONFIGS = {
     "start" => ["node", "node/server.js"],
   },
   "rust" => {
-    "build" => nil,
-    "start" => [""],
+    "build" => "(cd rust && cargo build)",
+    "start" => ["./rust/target/debug/tcp"],
   },
   "kotlin" => {
-    "build" => "",
-    "start" => [""],
+    "build" => "(cd kotlin && gradle clean && gradle fatJar)",
+    "start" => ["java", "-jar", "kotlin/build/libs/kotlin-1.0-SNAPSHOT-standalone.jar"],
   },
   "clojure" => {
-    "build" => nil,
-    "start" => [""],
+    "build" => "(cd clojure && lein uberjar)",
+    "start" => ["java", "-jar", "clojure/target/uberjar/tcp-server-0.1.0-SNAPSHOT-standalone.jar"],
   },
 }
 

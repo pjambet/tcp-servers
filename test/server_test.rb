@@ -40,6 +40,7 @@ describe "A server" do
     with_server do
       connect_to_server do |s|
         s.puts("QUIT")
+        s.gets
         assert s.eof?
       end
     end
@@ -52,16 +53,23 @@ describe "A server" do
 
       pids = 3.times.map do
         fork do
-          socket = TCPSocket.new("localhost", 3000)
-          2.times do
-            socket.puts "SET #{ SecureRandom.uuid } #{ rand(10) }"
-            sleep 0.01
-            socket.puts "GET #{ SecureRandom.uuid }"
+          begin
+            socket = TCPSocket.new("localhost", 3000)
+            2.times do
+              socket.puts "SET #{ SecureRandom.uuid } #{ rand(10) }"
+              sleep 0.01
+              socket.puts "GET #{ SecureRandom.uuid }"
+            end
+          ensure
+            socket.close
           end
         end
       end
 
-      pids.each { |pid| Process.wait(pid) }
+      pids.each do |pid|
+        Process.wait(pid)
+        assert_equal 0, $?.exitstatus # The exit code of the process
+      end
       assert true
     end
   end
@@ -74,12 +82,16 @@ describe "A server" do
   end
 
   def with_server
-    pid = start_server
-    wait_for_server
+    pid = nil
+    Timeout.timeout(10) do
+      pid = start_server
+      wait_for_server
 
-    yield
+      yield
+    end
   ensure
     Process.kill("KILL", pid) if pid
+    Process.wait(pid)
   end
 
   def start_server
@@ -92,7 +104,8 @@ describe "A server" do
     Timeout.timeout(2) do
       loop do
         begin
-          _socket = TCPSocket.new("localhost", 3000)
+          socket = TCPSocket.new("localhost", 3000)
+          socket.close
           break
         rescue Errno::ECONNREFUSED => _e
           sleep 0.001

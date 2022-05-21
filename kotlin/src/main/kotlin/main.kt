@@ -23,8 +23,13 @@ suspend fun runServer(opChannel: Channel<Operation>) = coroutineScope {
         while(true) {
             val client = server.accept()
             log.info("Starting handler for: $client")
-            supervisorScope {
-                launch { handleClient(client, opChannel) }
+            launch {
+                try {
+                    handleClient(client, opChannel)
+                } catch (t: Throwable) {
+                    log.error("Error handling client", t)
+                    client.close()
+                }
             }
             log.info("Launched")
         }
@@ -35,25 +40,26 @@ suspend fun handleClient(client: Socket, channel: Channel<Operation>) {
     log.info("Handling client: $client")
     while (true) {
         val output = PrintWriter(client.getOutputStream(), true)
-        val input = BufferedReader(InputStreamReader(client.inputStream)).readLine()
+        val input = BufferedReader(InputStreamReader(client.inputStream)).readLine() ?: return
+        println("input: $input")
 
-        if (input == "STOP") {
+        if (input.startsWith("STOP") || input.startsWith("QUIT")) {
             client.close()
+            return
         } else if (input.startsWith("GET")) {
-            var key: String
+            var key: String?
             try {
-                key = input.split(" ")[1]//.getOrNull(1)
+                key = input.split(" ").getOrNull(1)
             } catch(e: Exception) {
-//                log.error("ERROR, boooo", e)
                 throw e
             }
             if (key != null) {
                 val chan = Channel<String?>()
                 channel.send(Operation(key, null, chan))
-                val result = chan.receive() ?: "N/A"
-                output.println(result + "\n")
+                val result = chan.receive() ?: ""
+                output.println(result)
             } else {
-                output.println("N/A\n")
+                output.println("")
             }
         } else if (input.startsWith("SET")) {
             val key = input.split(" ").getOrNull(1)
@@ -61,10 +67,12 @@ suspend fun handleClient(client: Socket, channel: Channel<Operation>) {
             if (key != null && value != null) {
                 val chan = Channel<String?>(RENDEZVOUS)
                 channel.send(Operation(key, value, chan))
-                output.println("OK\n")
+                output.println("OK")
             } else {
-                output.println("N/A\n")
+                output.println("")
             }
+        } else if (input.startsWith("RAISE")) {
+            throw Throwable("foo de fafa")
         }
     }
 }
