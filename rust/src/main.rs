@@ -70,7 +70,7 @@ fn main() {
     let mut fd_set = FdSet::new();
     let mut clients: HashMap<i32, TcpStream> = HashMap::from([]);
 
-    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+    let listener = TcpListener::bind("127.0.0.1:3000").unwrap();
     let raw_fd = listener.as_raw_fd();
 
     let mut max_fd = raw_fd;
@@ -115,7 +115,9 @@ fn main() {
                         if i != raw_fd && (fd_set).is_set(i) {
                             fd_set.clear(i);
                             let stream = clients.get(&i).unwrap();
-                            handle_connection(stream, &mut db);
+                            if handle_connection(stream, &mut db) == false {
+                                clients.remove(&i);
+                            }
 
                             println!("Socket {} received something!", i);
                         }
@@ -129,9 +131,13 @@ fn main() {
     }
 }
 
-fn handle_connection(mut stream: &TcpStream, db: &mut HashMap<String, String>) {
+fn handle_connection(mut stream: &TcpStream, db: &mut HashMap<String, String>) -> bool {
     let mut buffer = [0; 1024];
-    stream.read(&mut buffer).unwrap();
+    let read_result = stream.read(&mut buffer);
+    if read_result.is_err() {
+        return false;
+    }
+    read_result.unwrap();
     let request = String::from_utf8_lossy(&buffer);
     println!("Received: {}", request);
 
@@ -144,11 +150,11 @@ fn handle_connection(mut stream: &TcpStream, db: &mut HashMap<String, String>) {
             println!("key=abc: {}", key == "abc");
 
             match db.get(key) {
-                Some(res) => res.to_string(),
-                None => "".to_string(),
+                Some(res) => res.to_string() + "\n",
+                None => "\n".to_string(),
             }
         } else {
-            "N/A\n".to_string()
+            "\n".to_string()
         }
     } else if request.starts_with("SET") {
         let parts: Vec<&str> = request.split(|c| char::is_ascii_whitespace(&c)).collect();
@@ -162,12 +168,20 @@ fn handle_connection(mut stream: &TcpStream, db: &mut HashMap<String, String>) {
             db.insert(key.to_string(), value.to_string());
             "OK\n".to_string()
         } else {
-            "N/A\n".to_string()
+            "\n".to_string()
         }
+    } else if request.starts_with("QUIT") {
+      return false
     } else {
         "OK\n".to_string()
     };
 
-    stream.write(response.as_bytes()).unwrap();
+    let write_response = stream.write(response.as_bytes());
+    if write_response.is_err() {
+        return false;
+    }
+    write_response.unwrap();
     stream.flush().unwrap();
+
+    return true;
 }
