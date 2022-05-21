@@ -83,13 +83,13 @@ describe "A server" do
   end
 
   def start_server
-
-    LOG.debug "Starting server with #{SERVER_CONFIG["start"]}"
-    spawn(SERVER_CONFIG["start"], STDOUT => "/dev/null", STDERR => "/dev/null")
+    args = SERVER_CONFIG["start"] + [PORT]
+    LOG.debug "Starting server with #{ args }"
+    spawn(*args, STDOUT => "/dev/null", STDERR => "/dev/null")
   end
 
   def wait_for_server
-    Timeout.timeout(1) do
+    Timeout.timeout(2) do
       loop do
         begin
           _socket = TCPSocket.new("localhost", 3000)

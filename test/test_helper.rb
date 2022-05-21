@@ -14,30 +14,36 @@ end
 
 SERVER_CONFIG = nil
 
+PORT = "3000"
+
 SERVER_CONFIGS = {
   "ruby" => {
     "build" => nil,
-    "start" => "ruby ruby/server.rb",
+    "start" => ["ruby", "ruby/server.rb"],
   },
   "python" => {
     "build" => nil,
-    "start" => "python3 python/server.py",
+    "start" => ["python3",  "python/server.py"],
   },
   "go" => {
     "build" => "go build -o ./go/server go/server.go",
-    "start" => "./go/server 3000",
+    "start" => ["./go/server"],
   },
   "node" => {
     "build" => nil,
-    "start" => "node node/server.js",
+    "start" => ["node", "node/server.js"],
   },
   "rust" => {
     "build" => nil,
-    "start" => "",
+    "start" => [""],
+  },
+  "kotlin" => {
+    "build" => "",
+    "start" => [""],
   },
   "clojure" => {
     "build" => nil,
-    "start" => "",
+    "start" => [""],
   },
 }
 

@@ -1,6 +1,6 @@
 // Inspired from: https://riptutorial.com/node-js/example/22405/a-simple-tcp-server
 const Net = require('net');
-const port = 8080;
+const port = process.argv[2];
 const db = new Map();
 
 const server = new Net.Server();
@@ -19,7 +19,7 @@ server.on('connection', function(socket) {
             let parts = request.split(' ');
             let key = parts[1].trim();
             if (key) {
-                response = db.get(key) || 'N/A';
+                response = db.get(key) || '';
                 response += '\n';
             } else {
                 response = 'N/A\n';
@@ -36,6 +36,8 @@ server.on('connection', function(socket) {
             } else {
                 response = 'N/A\n';
             }
+        } else if (request.startsWith("QUIT")) {
+            socket.close();
         } else {
             response = 'N/A\n';
         }
