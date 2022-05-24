@@ -9,31 +9,36 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Set;
 
 public class Main {
     public static void main(String[] args) throws IOException {
         Selector selector = Selector.open();
+        int port;
+        if (args.length < 1) {
+            port = 3000;
+        } else {
+            port = Integer.parseInt(args[0]);
+        }
         ServerSocketChannel serverSocket = ServerSocketChannel.open();
-        serverSocket.socket().bind(new InetSocketAddress(Integer.parseInt("3000")));
+        InetSocketAddress address = new InetSocketAddress(port);
+        serverSocket.socket().bind(address);
         serverSocket.configureBlocking(false);
         serverSocket.register(selector, SelectionKey.OP_ACCEPT);
 
-        System.out.println("Yooo");
+        System.out.println("Started on " + address);
+
         ByteBuffer buffer = ByteBuffer.allocate(256);
 
         HashMap<String, String> db = new HashMap<>();
         db.put("123", "456");
 
+        //noinspection InfiniteLoopStatement
         while (true) {
             selector.select();
             Set<SelectionKey> selectedKeys = selector.selectedKeys();
-            Iterator<SelectionKey> iter = selectedKeys.iterator();
 
-            while (iter.hasNext()) {
-                SelectionKey key = iter.next();
-
+            for (SelectionKey key : selectedKeys) {
                 if (key.isAcceptable()) {
                     register(selector, serverSocket);
                 }
@@ -41,8 +46,7 @@ public class Main {
                 if (key.isReadable()) {
                     answerWithEcho(buffer, key, db);
                 }
-
-                iter.remove();
+                selectedKeys.remove(key);
             }
         }
     }
