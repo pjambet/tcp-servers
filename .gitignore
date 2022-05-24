@@ -13,17 +13,17 @@ kotlin/!**/src/main/**/build/
 kotlin/!**/src/test/**/build/
 
 ### IntelliJ IDEA ###
-kotlin/.idea/modules.xml
-kotlin/.idea/workspace.xml
-kotlin/.idea/jarRepositories.xml
-kotlin/.idea/compiler.xml
-kotlin/.idea/libraries/
+**/.idea/modules.xml
+**/.idea/workspace.xml
+**/.idea/jarRepositories.xml
+**/.idea/compiler.xml
+**/.idea/libraries/
 *.iws
 *.iml
 *.ipr
-kotlin/out/
-kotlin/!**/src/main/**/out/
-kotlin/!**/src/test/**/out/
+**/out/
+**/!**/src/main/**/out/
+**/!**/src/test/**/out/
 
 
 ### VS Code ###
