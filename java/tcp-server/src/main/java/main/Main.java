@@ -9,6 +9,7 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Set;
 
 public class Main {
@@ -37,8 +38,11 @@ public class Main {
         while (true) {
             selector.select();
             Set<SelectionKey> selectedKeys = selector.selectedKeys();
+            Iterator<SelectionKey> iterator = selectedKeys.iterator();
 
-            for (SelectionKey key : selectedKeys) {
+            while (iterator.hasNext()) {
+                SelectionKey key = iterator.next();
+
                 if (key.isAcceptable()) {
                     register(selector, serverSocket);
                 }
@@ -46,31 +50,55 @@ public class Main {
                 if (key.isReadable()) {
                     answerWithEcho(buffer, key, db);
                 }
-                selectedKeys.remove(key);
+
+                iterator.remove();
             }
+
+//            for (SelectionKey key : selectedKeys) {
+//                if (key.isAcceptable()) {
+//                    register(selector, serverSocket);
+//                }
+//
+//                if (key.isReadable()) {
+//                    answerWithEcho(buffer, key, db);
+//                }
+            // Seems to throw ConcurrentModificationException from time to time
+//                selectedKeys.remove(key);
+//            }
         }
     }
 
-    private static void answerWithEcho(ByteBuffer buffer, SelectionKey key, HashMap<String, String> db) throws IOException {
+    private static void answerWithEcho(ByteBuffer buffer, SelectionKey key, HashMap<String, String> db) {
         SocketChannel client = (SocketChannel) key.channel();
-        client.read(buffer);
-        String request = new String(buffer.array()).trim();
+        try {
+            client.read(buffer);
+            String request = new String(buffer.array()).trim();
 
-        if (request.equals("foo de fafa")) {
-            client.close();
-            System.out.println("Not accepting client messages anymore");
-        } else if (request.startsWith("GET")) {
-            String[] parts = request.split(" ");
-            buffer.flip();
-            String responseString = db.getOrDefault(parts[1], "");
-            responseString += "\n";
-            ByteBuffer response = ByteBuffer.wrap(responseString.getBytes(StandardCharsets.UTF_8));
-            client.write(response);
-            buffer.clear();
-        } else {
-            buffer.flip();
-            client.write(buffer);
-            buffer.clear();
+            if (request.equals("foo de fafa")) {
+                client.close();
+                System.out.println("Not accepting client messages anymore");
+            } else if (request.startsWith("GET")) {
+                String[] parts = request.split(" ");
+                buffer.flip();
+                String responseString = db.getOrDefault(parts[1], "");
+                responseString += "\n";
+                ByteBuffer response = ByteBuffer.wrap(responseString.getBytes(StandardCharsets.UTF_8));
+                client.write(response);
+                buffer.clear();
+            } else {
+                buffer.flip();
+                client.write(buffer);
+                buffer.clear();
+            }
+        } catch (IOException e) {
+            System.err.println("Error handling client " + client + ", " + e.getMessage());
+            if (client.isOpen()) {
+                try {
+                    client.close();
+                } catch (IOException e2) {
+                    System.err.println("Another error ... " + e2.getMessage());
+                }
+            }
         }
     }
     private static void register(Selector selector, ServerSocketChannel serverSocket) throws IOException {
