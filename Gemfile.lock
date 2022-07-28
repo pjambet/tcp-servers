@@ -23,6 +23,7 @@ GEM
     ruby-progressbar (1.11.0)
 
 PLATFORMS
+  arm64-darwin-21
   x86_64-darwin-21
 
 DEPENDENCIES
@@ -33,4 +34,4 @@ DEPENDENCIES
   rake
 
 BUNDLED WITH
-   2.3.12
+   2.3.19
