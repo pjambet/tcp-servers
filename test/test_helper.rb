@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "minitest/autorun"
 require "minitest/focus"
 require "logger"
@@ -6,11 +8,11 @@ require "logger"
 
 LOG = Logger.new(STDOUT)
 
-if ENV["LOG_LEVEL"]
-  LOG.level = Logger.const_get(ENV["LOG_LEVEL"].upcase)
-else
-  LOG.level = Logger::WARN
-end
+LOG.level = if ENV["LOG_LEVEL"]
+              Logger.const_get(ENV["LOG_LEVEL"].upcase)
+            else
+              Logger::WARN
+            end
 
 SERVER_CONFIG = nil
 
@@ -23,7 +25,7 @@ SERVER_CONFIGS = {
   },
   "python" => {
     "build" => nil,
-    "start" => ["python3",  "python/server.py"],
+    "start" => ["python3", "python/server.py"],
   },
   "go" => {
     "build" => "go build -o ./go/server go/server.go",
@@ -50,10 +52,10 @@ SERVER_CONFIGS = {
 SERVER_CONFIG = SERVER_CONFIGS[ENV["SERVER"]&.downcase]
 
 if SERVER_CONFIG.nil?
-  raise "Need to pass a valid SERVER env variable to run, e.g SERVER=ruby rake, valid options: #{ SERVER_CONFIGS.keys.join(", ") }"
+  raise "Need to pass a valid SERVER env variable to run, e.g SERVER=ruby rake, valid options: #{ SERVER_CONFIGS.keys.join(', ') }"
 end
 
 if SERVER_CONFIG["build"]
-  LOG.debug "building with #{ SERVER_CONFIG["build"] }"
+  LOG.debug "building with #{ SERVER_CONFIG['build'] }"
   system(SERVER_CONFIG["build"])
 end

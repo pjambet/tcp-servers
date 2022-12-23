@@ -1,7 +1,9 @@
+# frozen_string_literal: true
+
 require "socket"
 require "logger"
 
-LOGGER = Logger.new(STDOUT)
+LOGGER = Logger.new($stdout)
 LOGGER.level = Logger::INFO
 
 def handle_client(db, client)
@@ -33,7 +35,7 @@ def handle_client(db, client)
 rescue Errno::ECONNRESET => e
   LOGGER.error e
   client.close
-  return nil
+  nil
 end
 
 def start_server(port)
@@ -43,20 +45,16 @@ def start_server(port)
   LOGGER.info "Server started on port: #{ port }"
 
   loop do
-    connected_clients =
-      clients
-        .delete_if { |socket| socket.closed? }
+    connected_clients = clients.delete_if(&:closed?)
 
-    reads, _, _ = IO.select([ server ] + connected_clients)
+    reads, = IO.select([server] + connected_clients)
 
     reads.each do |socket|
       if socket == server
         client = server.accept
         clients << client
-      else
-        if handle_client(db, socket).nil?
-          clients.delete(socket.fileno)
-        end
+      elsif handle_client(db, socket).nil?
+        clients.delete(socket.fileno)
       end
     rescue IOError => e
       LOGGER.error "error handling socket: #{ e }"

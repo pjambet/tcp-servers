@@ -50,19 +50,16 @@ describe "A server" do
     with_server do
       socket = nil
 
-
       pids = 3.times.map do
         fork do
-          begin
-            socket = TCPSocket.new("localhost", 3000)
-            2.times do
-              socket.puts "SET #{ SecureRandom.uuid } #{ rand(10) }"
-              sleep 0.01
-              socket.puts "GET #{ SecureRandom.uuid }"
-            end
-          ensure
-            socket.close
+          socket = TCPSocket.new("localhost", 3000)
+          2.times do
+            socket.puts "SET #{ SecureRandom.uuid } #{ rand(10) }"
+            sleep 0.01
+            socket.puts "GET #{ SecureRandom.uuid }"
           end
+        ensure
+          socket.close
         end
       end
 
@@ -103,13 +100,11 @@ describe "A server" do
   def wait_for_server
     Timeout.timeout(2) do
       loop do
-        begin
-          socket = TCPSocket.new("localhost", 3000)
-          socket.close
-          break
-        rescue Errno::ECONNREFUSED => _e
-          sleep 0.001
-        end
+        socket = TCPSocket.new("localhost", 3000)
+        socket.close
+        break
+      rescue Errno::ECONNREFUSED => _e
+        sleep 0.001
       end
     end
   end
