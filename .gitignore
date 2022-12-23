@@ -39,3 +39,9 @@ go/server
 
 .clj-kondo/
 .lsp/
+
+### Scala
+
+project/target/
+target/
+.bsp/
