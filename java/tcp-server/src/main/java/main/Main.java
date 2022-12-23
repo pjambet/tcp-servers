@@ -8,6 +8,7 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Set;
@@ -28,11 +29,7 @@ public class Main {
         serverSocket.register(selector, SelectionKey.OP_ACCEPT);
 
         System.out.println("Started on " + address);
-
-        ByteBuffer buffer = ByteBuffer.allocate(256);
-
         HashMap<String, String> db = new HashMap<>();
-        db.put("123", "456");
 
         //noinspection InfiniteLoopStatement
         while (true) {
@@ -48,43 +45,48 @@ public class Main {
                 }
 
                 if (key.isReadable()) {
-                    answerWithEcho(buffer, key, db);
+                    answerWithEcho(key, db);
                 }
 
                 iterator.remove();
             }
-
-//            for (SelectionKey key : selectedKeys) {
-//                if (key.isAcceptable()) {
-//                    register(selector, serverSocket);
-//                }
-//
-//                if (key.isReadable()) {
-//                    answerWithEcho(buffer, key, db);
-//                }
-            // Seems to throw ConcurrentModificationException from time to time
-//                selectedKeys.remove(key);
-//            }
         }
     }
 
-    private static void answerWithEcho(ByteBuffer buffer, SelectionKey key, HashMap<String, String> db) {
-        SocketChannel client = (SocketChannel) key.channel();
+    public static void zeroBuffersArray(ByteBuffer buf) {
+        Arrays.fill(buf.array(), (byte)0);
+        buf.clear();
+    }
+
+    private static void answerWithEcho(SelectionKey selectionKey, HashMap<String, String> db) {
+        ByteBuffer buffer = ByteBuffer.allocate(256);
+        SocketChannel client = (SocketChannel) selectionKey.channel();
         try {
             client.read(buffer);
             String request = new String(buffer.array()).trim();
 
-            if (request.equals("foo de fafa")) {
+            if (request.equals("foo de fafa") || request.equals("")) {
                 client.close();
                 System.out.println("Not accepting client messages anymore");
             } else if (request.startsWith("GET")) {
                 String[] parts = request.split(" ");
-                buffer.flip();
                 String responseString = db.getOrDefault(parts[1], "");
                 responseString += "\n";
                 ByteBuffer response = ByteBuffer.wrap(responseString.getBytes(StandardCharsets.UTF_8));
                 client.write(response);
-                buffer.clear();
+            } else if (request.startsWith("SET")) {
+                String[] parts = request.split(" ");
+                String responseString;
+                if (parts.length >= 3) {
+                    responseString = "OK\n";
+                    String key = parts[1];
+                    String value = parts[2];
+                    db.put(key, value);
+                } else {
+                    responseString = "ERROR\n";
+                }
+                ByteBuffer response = ByteBuffer.wrap(responseString.getBytes(StandardCharsets.UTF_8));
+                client.write(response);
             } else {
                 buffer.flip();
                 client.write(buffer);
