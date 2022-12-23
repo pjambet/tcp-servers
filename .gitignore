@@ -45,3 +45,8 @@ go/server
 project/target/
 target/
 .bsp/
+
+### C
+
+*.o
+c/server
