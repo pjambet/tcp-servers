@@ -36,3 +36,6 @@ kotlin/.DS_Store
 rust/target/**
 
 go/server
+
+.clj-kondo/
+.lsp/
