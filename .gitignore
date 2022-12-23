@@ -50,3 +50,7 @@ target/
 
 *.o
 c/server
+
+### Zig
+
+zig/server
