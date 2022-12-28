@@ -11,50 +11,60 @@ import (
 const MIN = 1
 const MAX = 100
 
-type op struct {
-	key   string
-	value string
-	resp  chan string
+type Command int
+
+const (
+	Get Command = iota + 1 // 1
+	Set                    // 2
+)
+
+type commandMessage struct {
+	commandName     Command
+	key             string
+	value           string
+	responseChannel chan string
 }
 
-func handleConnection(channel chan op, c net.Conn) {
+func handleConnection(commandChannel chan commandMessage, client net.Conn) {
 	for {
-		netData, err := bufio.NewReader(c).ReadString('\n')
+		netData, err := bufio.NewReader(client).ReadString('\n')
 		if err != nil {
 			fmt.Println("error reading:", err)
 			return
 		}
 
-		temp := strings.TrimSpace(netData)
-		if temp == "STOP" || temp == "QUIT" {
+		commandString := strings.TrimSpace(netData)
+		if commandString == "STOP" || commandString == "QUIT" {
 			break
-		} else if strings.HasPrefix(temp, "GET") {
-			parts := strings.Split(temp, " ")
+		} else if strings.HasPrefix(commandString, "GET") {
+			parts := strings.Split(commandString, " ")
 			if len(parts) > 1 {
 				key := parts[1]
-				op := op{
-					key:  key,
-					resp: make(chan string)}
-				channel <- op
-				res := <-op.resp
-				c.Write([]byte(res + "\n"))
+				command := commandMessage{
+					commandName:     Get,
+					key:             key,
+					responseChannel: make(chan string)}
+				commandChannel <- command
+				res := <-command.responseChannel
+				client.Write([]byte(res + "\n"))
 			}
-		} else if strings.HasPrefix(temp, "SET") {
-			parts := strings.Split(temp, " ")
+		} else if strings.HasPrefix(commandString, "SET") {
+			parts := strings.Split(commandString, " ")
 			if len(parts) > 2 {
 				key := parts[1]
 				value := parts[2]
-				op := op{
-					key:   key,
-					value: value,
-					resp:  make(chan string)}
-				channel <- op
-				res := <-op.resp
-				c.Write([]byte(res + "\n"))
+				command := commandMessage{
+					commandName:     Set,
+					key:             key,
+					value:           value,
+					responseChannel: make(chan string)}
+				commandChannel <- command
+				res := <-command.responseChannel
+				client.Write([]byte(res + "\n"))
 			}
 		}
 	}
-	c.Close()
+	client.Close()
 }
 
 func main() {
@@ -65,36 +75,37 @@ func main() {
 	}
 
 	PORT := ":" + arguments[1]
-	l, err := net.Listen("tcp4", PORT)
+	server, err := net.Listen("tcp4", PORT)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	defer l.Close()
+	defer server.Close()
 
-	m := make(map[string]string)
-	channel := make(chan op)
+	db := make(map[string]string)
+	commandChannel := make(chan commandMessage)
 
 	go func() {
 		for {
 			select {
-			case res := <-channel:
-				if len(res.value) > 0 {
-					m[res.key] = res.value
-					res.resp <- "OK"
-				} else {
-					res.resp <- m[res.key]
+			case command := <-commandChannel:
+				switch command.commandName {
+				case Get:
+					command.responseChannel <- db[command.key]
+				case Set:
+					db[command.key] = command.value
+					command.responseChannel <- "OK"
 				}
 			}
 		}
 	}()
 
 	for {
-		c, err := l.Accept()
+		client, err := server.Accept()
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
-		go handleConnection(channel, c)
+		go handleConnection(commandChannel, client)
 	}
 }
