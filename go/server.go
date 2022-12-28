@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -14,8 +15,10 @@ const MAX = 100
 type Command int
 
 const (
-	Get Command = iota + 1 // 1
-	Set                    // 2
+	Get  Command = iota + 1 // 1
+	Set                     // 2
+	Incr                    // 3
+	Del                     // 4
 )
 
 type commandMessage struct {
@@ -26,6 +29,7 @@ type commandMessage struct {
 }
 
 func handleConnection(commandChannel chan commandMessage, client net.Conn) {
+outer: // A label, necessary for the break statement below
 	for {
 		netData, err := bufio.NewReader(client).ReadString('\n')
 		if err != nil {
@@ -33,38 +37,117 @@ func handleConnection(commandChannel chan commandMessage, client net.Conn) {
 			return
 		}
 
+		var response string
 		commandString := strings.TrimSpace(netData)
-		if commandString == "STOP" || commandString == "QUIT" {
-			break
-		} else if strings.HasPrefix(commandString, "GET") {
-			parts := strings.Split(commandString, " ")
+		parts := strings.Split(commandString, " ")
+		command := parts[0]
+
+		switch command {
+		case "STOP", "QUIT":
+			break outer
+		case "GET":
 			if len(parts) > 1 {
 				key := parts[1]
-				command := commandMessage{
+				commandMessage := commandMessage{
 					commandName:     Get,
 					key:             key,
 					responseChannel: make(chan string)}
-				commandChannel <- command
-				res := <-command.responseChannel
-				client.Write([]byte(res + "\n"))
+
+				commandChannel <- commandMessage
+				response = <-commandMessage.responseChannel
+			} else {
+				response = "ERR wrong number of arguments for 'get' command"
 			}
-		} else if strings.HasPrefix(commandString, "SET") {
-			parts := strings.Split(commandString, " ")
+		case "SET":
 			if len(parts) > 2 {
 				key := parts[1]
 				value := parts[2]
-				command := commandMessage{
+				commandMessage := commandMessage{
 					commandName:     Set,
 					key:             key,
 					value:           value,
 					responseChannel: make(chan string)}
-				commandChannel <- command
-				res := <-command.responseChannel
-				client.Write([]byte(res + "\n"))
+
+				commandChannel <- commandMessage
+				response = <-commandMessage.responseChannel
+			} else {
+				response = "ERR wrong number of arguments for 'set' command"
+			}
+		case "INCR":
+			if len(parts) > 1 {
+				key := parts[1]
+				commandMessage := commandMessage{
+					commandName:     Incr,
+					key:             key,
+					responseChannel: make(chan string)}
+
+				commandChannel <- commandMessage
+				response = <-commandMessage.responseChannel
+			} else {
+				response = "ERR wrong number of arguments for 'incr' command"
+			}
+		case "DEL":
+			key := parts[1]
+			commandMessage := commandMessage{
+				commandName:     Del,
+				key:             key,
+				responseChannel: make(chan string)}
+
+			commandChannel <- commandMessage
+			response = <-commandMessage.responseChannel
+		default:
+			response = "ERR unknown command"
+		}
+
+		client.Write([]byte(response + "\n"))
+	}
+
+	client.Close()
+}
+
+func handleDB(commandChannel chan commandMessage) {
+	db := make(map[string]string)
+
+	for {
+		select {
+		case command := <-commandChannel:
+			switch command.commandName {
+			case Get:
+				command.responseChannel <- db[command.key]
+			case Set:
+				db[command.key] = command.value
+				command.responseChannel <- "OK"
+			case Incr:
+				value, ok := db[command.key]
+				var response string
+
+				if ok {
+					intValue, err := strconv.Atoi(value)
+					if err != nil {
+						response = "ERR value is not an integer or out of range"
+					} else {
+						response = strconv.Itoa(intValue + 1)
+						db[command.key] = response
+					}
+				} else {
+					response = "1"
+					db[command.key] = response
+				}
+				command.responseChannel <- response
+			case Del:
+				_, ok := db[command.key]
+				var response string
+
+				if ok {
+					delete(db, command.key)
+					response = "1"
+				} else {
+					response = "0"
+				}
+				command.responseChannel <- response
 			}
 		}
 	}
-	client.Close()
 }
 
 func main() {
@@ -82,23 +165,9 @@ func main() {
 	}
 	defer server.Close()
 
-	db := make(map[string]string)
 	commandChannel := make(chan commandMessage)
 
-	go func() {
-		for {
-			select {
-			case command := <-commandChannel:
-				switch command.commandName {
-				case Get:
-					command.responseChannel <- db[command.key]
-				case Set:
-					db[command.key] = command.value
-					command.responseChannel <- "OK"
-				}
-			}
-		}
-	}()
+	go handleDB(commandChannel)
 
 	for {
 		client, err := server.Accept()
