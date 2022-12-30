@@ -36,6 +36,48 @@ describe "A server" do
     end
   end
 
+  it "responds to DEL" do
+    with_server do
+      connect_to_server do |s|
+        s.puts("SET a b")
+        assert_equal "OK\n", s.gets
+
+        s.puts("GET a")
+        assert_equal "b\n", s.gets
+
+        s.puts("DEL a")
+        assert_equal "1\n", s.gets
+
+        s.puts("GET a")
+        assert_equal "\n", s.gets
+
+        s.puts("DEL a")
+        assert_equal "0\n", s.gets
+      end
+    end
+  end
+
+  it "responds to INCR" do
+    with_server do
+      connect_to_server do |s|
+        s.puts("SET a b")
+        assert_equal "OK\n", s.gets
+
+        s.puts("INCR a")
+        assert_equal "ERR value is not an integer or out of range\n", s.gets
+
+        s.puts("DEL a")
+        assert_equal "1\n", s.gets
+
+        s.puts("INCR a")
+        assert_equal "1\n", s.gets
+
+        s.puts("INCR a")
+        assert_equal "2\n", s.gets
+      end
+    end
+  end
+
   it "respond to QUIT" do
     with_server do
       connect_to_server do |s|
@@ -70,6 +112,8 @@ describe "A server" do
       assert true
     end
   end
+
+  private
 
   def connect_to_server
     socket = TCPSocket.new "localhost", 3000
