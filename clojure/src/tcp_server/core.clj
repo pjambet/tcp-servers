@@ -1,11 +1,12 @@
 (ns tcp-server.core
-  (:import (java.net ServerSocket))
   (:require [clojure.core.async
              :as a
-             :refer [>! <! >!! <!! go chan buffer close! thread
-                     alts! alts!! timeout]]
+             :refer [<! >! chan go]]
             [clojure.java.io
-             :as io])
+             :as io]
+            [clojure.string
+             :as clojure.string])
+  (:import (java.net ServerSocket))
   (:gen-class))
 
 (defn get-request
@@ -80,7 +81,7 @@
 
 (defn -main
   "I don't do a whole lot ... yet."
-  [& args]
+  [& _args]
   (println "About to start ...")
   (let [command-channel (chan)]
     (go (loop [db (hash-map)]
