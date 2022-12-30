@@ -13,16 +13,39 @@ def handle_client(db, client)
     return nil
   end
   parts = request.split(" ")
+  command = parts[0]
   key = parts[1]
   value = parts[2]
   response = nil
 
-  if request.start_with?("GET") && key
-    response = db[key]
-  elsif request.start_with?("SET") && key && value
+  case
+  when command == "GET" && key
+    response = db[key] if key
+  when command == "SET" && key && value
     db[key] = value
     response = "OK"
-  elsif request.start_with?("QUIT")
+  when command == "DEL" && key
+    if db[key]
+      db.delete(key)
+      response = "1"
+    else
+      response = "0"
+    end
+  when command == "INCR" && key
+    existing = db[key]
+    if existing
+      begin
+        int_value = Integer(existing)
+        response = (int_value + 1).to_s
+        db[key] = response
+      rescue ArgumentError
+        response = "ERR value is not an integer or out of range"
+      end
+    else
+      response = "1"
+      db[key] = "1"
+    end
+  when command == "QUIT"
     client.close
     return nil
   else
