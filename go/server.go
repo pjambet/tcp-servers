@@ -29,7 +29,8 @@ type commandMessage struct {
 }
 
 func handleConnection(commandChannel chan commandMessage, client net.Conn) {
-outer: // A label, necessary for the break statement below
+	defer client.Close()
+
 	for {
 		netData, err := bufio.NewReader(client).ReadString('\n')
 		if err != nil {
@@ -44,7 +45,7 @@ outer: // A label, necessary for the break statement below
 
 		switch command {
 		case "STOP", "QUIT":
-			break outer
+			return
 		case "GET":
 			if len(parts) > 1 {
 				key := parts[1]
@@ -101,8 +102,6 @@ outer: // A label, necessary for the break statement below
 
 		client.Write([]byte(response + "\n"))
 	}
-
-	client.Close()
 }
 
 func handleDB(commandChannel chan commandMessage) {
