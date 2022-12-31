@@ -91,22 +91,26 @@
       {:updated db :response "ERR wrong number of arguments for 'incr' command"})
     :else {:updated db :response "Unknown command"}))
 
+(defn handle-db
+  [command-channel]
+  (go (loop [db (hash-map)]
+        (let [response (<! command-channel)
+              type (response :type)
+              key (response :key)
+              value (response :value)
+              chan-resp (response :resp)
+              result (update-db db type key value)
+              new-db (result :updated)
+              response (result :response)]
+          (>! chan-resp response)
+          (recur new-db)))))
+
 (defn -main
   "I don't do a whole lot ... yet."
   [& _args]
   (println "About to start ...")
   (let [command-channel (chan)]
-    (go (loop [db (hash-map)]
-          (let [response (<! command-channel)
-                type (response :type)
-                key (response :key)
-                value (response :value)
-                chan-resp (response :resp)
-                result (update-db db type key value)
-                new-db (result :updated)
-                response (result :response)]
-            (>! chan-resp response)
-            (recur new-db))))
+    (handle-db command-channel)
     (with-open [server-socket (ServerSocket. 3000)]
       (loop []
         (let [client-socket (.accept server-socket)]
