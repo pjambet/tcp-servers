@@ -9,9 +9,6 @@ import (
 	"strings"
 )
 
-const MIN = 1
-const MAX = 100
-
 type Command int
 
 const (
