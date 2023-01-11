@@ -1,9 +1,9 @@
 defmodule TcpServer.Registry do
-  alias Enumerable.GenEvent
+  # alias Enumerable.GenEvent
   use GenServer
 
-  def start_link(event_manager, opts \\ []) do
-    GenServer.start_link(__MODULE__, event_manager, opts)
+  def start_link(opts \\ []) do
+    GenServer.start_link(__MODULE__, :ok, opts)
   end
 
   def lookup(server, name) do
@@ -20,10 +20,10 @@ defmodule TcpServer.Registry do
 
   ## Callbacks
 
-  def init(events) do
+  def init(:ok) do
     names = %{}
     refs = %{}
-    {:ok, %{names: names, refs: refs, events: events}}
+    {:ok, %{names: names, refs: refs}}
   end
 
   def handle_call({:lookup, name}, _from, state) do
@@ -42,18 +42,19 @@ defmodule TcpServer.Registry do
       ref = Process.monitor(pid)
       refs = Map.put(state.refs, ref, name)
       names = Map.put(state.names, name, pid)
+      # GenEvent.sync_notify(state.events, {:create, name, pid})
       {:noreply, %{state | names: names, refs: refs}}
     end
   end
 
-  def handle_info({:DOWN, ref, :process, pid, _reason}, state) do
+  def handle_info({:DOWN, ref, :process, _pid, _reason}, state) do
     {name, refs} = Map.pop(state.refs, ref)
     names = Map.delete(state.names, name)
-    GenEvent.sync_notify(state.events, {:exit, name, pid})
+    # GenEvent.sync_notify(state.events, {:exit, name, pid})
     {:noreply, %{state | names: names, refs: refs}}
   end
 
-  def handle_info(_msg, state) do
-    {:noreply, state}
-  end
+  # def handle_info(_msg, state) do
+  #   {:noreply, state}
+  # end
 end
