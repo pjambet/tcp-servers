@@ -1,8 +1,9 @@
 defmodule TcpServer.Registry do
+  alias Enumerable.GenEvent
   use GenServer
 
-  def start_link(opts \\ []) do
-    GenServer.start_link(__MODULE__, :ok, opts)
+  def start_link(event_manager, opts \\ []) do
+    GenServer.start_link(__MODULE__, event_manager, opts)
   end
 
   def lookup(server, name) do
@@ -19,35 +20,40 @@ defmodule TcpServer.Registry do
 
   ## Callbacks
 
-  def init(:ok) do
+  def init(events) do
     names = %{}
     refs = %{}
-    {:ok, {names, refs}}
+    {:ok, %{names: names, refs: refs, events: events}}
   end
 
-  def handle_call({:lookup, name}, _from, {names, _} = state) do
-    {:reply, Map.fetch(names, name), state}
+  def handle_call({:lookup, name}, _from, state) do
+    {:reply, Map.fetch(state.names, name), state}
   end
 
   def handle_call(:stop, _from, state) do
     {:stop, :normal, :ok, state}
   end
 
-  def handle_cast({:create, name}, {names, refs}) do
-    if(Map.has_key?(names, name)) do
-      {:noreply, {names, refs}}
+  def handle_cast({:create, name}, state) do
+    if(Map.has_key?(state.names, name)) do
+      {:noreply, state}
     else
       {:ok, pid} = TcpServer.Bucket.start_link()
       ref = Process.monitor(pid)
-      refs = Map.put(refs, ref, name)
-      names = Map.put(names, name, pid)
-      {:noreply, {names, refs}}
+      refs = Map.put(state.refs, ref, name)
+      names = Map.put(state.names, name, pid)
+      {:noreply, %{state | names: names, refs: refs}}
     end
   end
 
-  def handle_info({:DOWN, ref, :process, _pid, _reason}, {names, refs}) do
-    {name, refs} = Map.pop(refs, ref)
-    names = Map.delete(names, name)
-    {:noreply, {names, refs}}
+  def handle_info({:DOWN, ref, :process, pid, _reason}, state) do
+    {name, refs} = Map.pop(state.refs, ref)
+    names = Map.delete(state.names, name)
+    GenEvent.sync_notify(state.events, {:exit, name, pid})
+    {:noreply, %{state | names: names, refs: refs}}
+  end
+
+  def handle_info(_msg, state) do
+    {:noreply, state}
   end
 end

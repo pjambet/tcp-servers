@@ -1,8 +1,21 @@
 defmodule TcpServer.RegistryTest do
+  alias Enumerable.GenEvent
   use ExUnit.Case
 
+  defmodule Forwarder do
+    use GenEvent
+
+    def handle_event(event, parent) do
+      send(parent, event)
+      {:ok, parent}
+    end
+  end
+
   setup do
-    {:ok, registry} = TcpServer.Registry.start_link()
+    {:ok, manager} = GenEvent.start_link()
+    {:ok, registry} = TcpServer.Registry.start_link(manager)
+
+    GenEvent.add_mon_handler(manager, Forward, self())
     {:ok, registry: registry}
   end
 
@@ -21,5 +34,14 @@ defmodule TcpServer.RegistryTest do
     {:ok, bucket} = TcpServer.Registry.lookup(registry, "shopping")
     Agent.stop(bucket)
     assert TcpServer.Registry.lookup(registry, "shopping") == :error
+  end
+
+  test "sends events on create on crash", %{registry: registry} do
+    TcpServer.Registry.create(registry, "shopiing")
+    {:ok, bucket} = TcpServer.Registry.lookup(registry, "shopping")
+    assert_receive {:create, "shopping", ^bucket}
+
+    Agent.stop(bucket)
+    assert_receive {:exit, "shopping", ^bucket}
   end
 end
