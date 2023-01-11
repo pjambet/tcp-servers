@@ -20,13 +20,13 @@ defmodule TcpServer.Registry do
   ## Callbacks
 
   def init(:ok) do
-    names = HashDict.new()
-    refs = HashDict.new()
+    names = %{}
+    refs = %{}
     {:ok, {names, refs}}
   end
 
   def handle_call({:lookup, name}, _from, {names, _} = state) do
-    {:reply, HashDict.fetch(names, name), state}
+    {:reply, Map.fetch(names, name), state}
   end
 
   def handle_call(:stop, _from, state) do
@@ -34,20 +34,20 @@ defmodule TcpServer.Registry do
   end
 
   def handle_cast({:create, name}, {names, refs}) do
-    if(HashDict.has_key?(names, name)) do
+    if(Map.has_key?(names, name)) do
       {:noreply, {names, refs}}
     else
       {:ok, pid} = TcpServer.Bucket.start_link()
       ref = Process.monitor(pid)
-      refs = HashDict.put(refs, ref, name)
-      names = HashDict.put(names, name, pid)
+      refs = Map.put(refs, ref, name)
+      names = Map.put(names, name, pid)
       {:noreply, {names, refs}}
     end
   end
 
   def handle_info({:DOWN, ref, :process, _pid, _reason}, {names, refs}) do
-    {name, refs} = HashDict.pop(refs, ref)
-    names = HashDict.delete(names, name)
+    {name, refs} = Map.pop(refs, ref)
+    names = Map.delete(names, name)
     {:noreply, {names, refs}}
   end
 end
