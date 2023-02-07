@@ -1,4 +1,6 @@
 defmodule TcpServer.Bucket do
+  use Agent, restart: :temporary
+
   def start_link do
     Agent.start_link(fn -> %{} end)
   end

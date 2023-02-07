@@ -22,4 +22,8 @@ defmodule TcpServer.BucketTest do
     assert TcpServer.Bucket.delete(bucket, "milk") == 3
     assert TcpServer.Bucket.delete(bucket, "milk") == nil
   end
+
+  test "are temporary workers" do
+    assert Supervisor.child_spec(TcpServer.Bucket, []).restart == :temporary
+  end
 end
