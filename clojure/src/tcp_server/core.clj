@@ -38,22 +38,26 @@
   [channel client-socket]
   (go (loop [resp-channel (chan)]
         (let [request (.readLine (io/reader client-socket))
-              writer (io/writer client-socket)
-              parts (string/split request #" ")
-              command (get parts 0)]
-          (cond
-            (contains? valid-commands command)
-            (let [response (request-for-command command parts resp-channel)]
-              (when response
-                (>! channel response)
-                (let [value (<! resp-channel)]
-                  (.write writer (str value "\n"))
-                  (.flush writer)
-                  (recur resp-channel))))
-            (= command "QUIT") (.close client-socket)
-            :else (do
-                    (println "Unknown request:" request)
-                    (recur resp-channel)))))))
+              writer (io/writer client-socket)]
+          (if (nil? request)
+            (do
+              (println "Nil request, closing")
+              (.close client-socket))
+            (let [parts (string/split request #" ")
+                  command (get parts 0)]
+              (cond
+                (contains? valid-commands command)
+                (let [response (request-for-command command parts resp-channel)]
+                  (when response
+                    (>! channel response)
+                    (let [value (<! resp-channel)]
+                      (.write writer (str value "\n"))
+                      (.flush writer)
+                      (recur resp-channel))))
+                (= command "QUIT") (.close client-socket)
+                :else (do
+                        (println "Unknown request:" request)
+                        (recur resp-channel)))))))))
 
 (defn atoi
   [string]
