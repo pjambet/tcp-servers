@@ -1,10 +1,7 @@
 (ns tcp-server.core
-  (:require [clojure.core.async
-             :as a]
-            [clojure.java.io
-             :as io]
-            [clojure.string
-             :as string])
+  (:require [clojure.core.async :as a]
+            [clojure.java.io :as io]
+            [clojure.string :as string])
   (:import (java.net ServerSocket))
   (:gen-class))
 
