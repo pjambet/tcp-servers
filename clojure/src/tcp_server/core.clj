@@ -1,7 +1,6 @@
 (ns tcp-server.core
   (:require [clojure.core.async
-             :as a
-             :refer [<! >! chan go]]
+             :as a]
             [clojure.java.io
              :as io]
             [clojure.string
@@ -36,28 +35,32 @@
 (defn handle-client
   " write me ..."
   [channel client-socket]
-  (go (loop [resp-channel (chan)]
-        (let [request (.readLine (io/reader client-socket))
-              writer (io/writer client-socket)]
-          (if (nil? request)
-            (do
-              (println "Nil request, closing")
-              (.close client-socket))
-            (let [parts (string/split request #" ")
-                  command (get parts 0)]
-              (cond
-                (contains? valid-commands command)
-                (let [response (request-for-command command parts resp-channel)]
-                  (when response
-                    (>! channel response)
-                    (let [value (<! resp-channel)]
-                      (.write writer (str value "\n"))
-                      (.flush writer)
-                      (recur resp-channel))))
-                (= command "QUIT") (.close client-socket)
-                :else (do
-                        (println "Unknown request:" request)
-                        (recur resp-channel)))))))))
+  (a/go (loop [resp-channel (a/chan)]
+          (let [request (.readLine (io/reader client-socket))
+                writer (io/writer client-socket)]
+            (if (nil? request)
+              (do
+                (println "Nil request, closing")
+                (a/close! resp-channel)
+                (.close client-socket))
+              (let [parts (string/split request #" ")
+                    command (get parts 0)]
+                (cond
+                  (contains? valid-commands command)
+                  (let [response (request-for-command command parts resp-channel)]
+                    (when response
+                      (a/>! channel response)
+                      (let [value (a/<! resp-channel)]
+                        (.write writer (str value "\n"))
+                        (.flush writer)
+                        (recur resp-channel))))
+                  (= command "QUIT")
+                  (do
+                    (a/close! resp-channel)
+                    (.close client-socket))
+                  :else (do
+                          (println "Unknown request:" request)
+                          (recur resp-channel)))))))))
 
 (defn atoi
   [string]
@@ -97,23 +100,23 @@
 
 (defn handle-db
   [command-channel]
-  (go (loop [db (hash-map)]
-        (let [response (<! command-channel)
-              type (response :type)
-              key (response :key)
-              value (response :value)
-              chan-resp (response :resp)
-              result (update-db db type key value)
-              new-db (result :updated)
-              response (result :response)]
-          (>! chan-resp response)
-          (recur new-db)))))
+  (a/go (loop [db (hash-map)]
+          (let [response (a/<! command-channel)
+                type (response :type)
+                key (response :key)
+                value (response :value)
+                chan-resp (response :resp)
+                result (update-db db type key value)
+                new-db (result :updated)
+                response (result :response)]
+            (a/>! chan-resp response)
+            (recur new-db)))))
 
 (defn -main
   "I don't do a whole lot ... yet."
   [& _args]
   (println "About to start ...")
-  (let [command-channel (chan)]
+  (let [command-channel (a/chan)]
     (handle-db command-channel)
     (with-open [server-socket (ServerSocket. 3000)]
       (loop []
