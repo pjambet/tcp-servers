@@ -6,117 +6,118 @@
   (:gen-class))
 
 (defn key-request
-  [type key channel]
-  {:type type :key key :resp channel})
+  "Helper to structure the basic parts of a command"
+  [command key]
+  {:command command :key key})
 
 (defn key-value-request
-  [type key value channel]
-  (assoc (key-request type key channel) :value value))
+  "Helper to structure the various parts of a SET command"
+  [command key value]
+  (assoc (key-request command key) :value value))
 
 (def valid-commands
+  "Valid commands"
   #{"GET" "SET" "INCR" "DEL"})
 
 (defn request-for-command
-  [command parts resp-channel]
+  "Return a structured representation of a client command"
+  [command parts]
   (cond
     (= command "GET")
-    (key-request :get (get parts 1) resp-channel)
+    (key-request :get (get parts 1))
     (= command "SET")
-    (key-value-request :set (get parts 1) (get parts 2) resp-channel)
+    (key-value-request :set (get parts 1) (get parts 2))
     (= command "INCR")
-    (key-request :incr (get parts 1) resp-channel)
+    (key-request :incr (get parts 1))
     (= command "DEL")
-    (key-request :del (get parts 1) resp-channel)))
+    (key-request :del (get parts 1))))
 
+
+(defn atoi
+  "Attempt to convert a string to integer, returns nil if it can't be parsed"
+  [string]
+  (try
+    (Integer/valueOf string)
+    (catch NumberFormatException _e
+      nil)))
+
+(defn increment-number
+  "Wrap the lower level operations required to process an increment command"
+  [db key]
+  (swap! db (fn [current-state]
+              (if (contains? current-state key)
+                (let [number (atoi (get current-state key))]
+                  (if number
+                    (assoc current-state key (str (+ number 1)))
+                    current-state))
+                (assoc current-state key "1")))))
+
+(defn process-command
+  "Perform various operations depending on the command sent by the client"
+  [db request]
+  (let [command (request :command)
+        key (request :key)
+        value (request :value)]
+    (cond
+      (= command :get)
+      (if key
+        (get @db key "")
+        "ERR wrong number of arguments for 'get' command")
+      (= command :set)
+      (if (and key value)
+        (do
+          (swap! db (fn [current-state]
+                      (assoc current-state key value)))
+          "OK")
+        "ERR wrong number of arguments for 'set' command")
+      (= command :del)
+      (if key
+        (let [[old-value _] (swap-vals! db (fn [current-state]
+                                             (dissoc current-state key)))]
+          (if (contains? old-value key) "1" "0"))
+        "ERR wrong number of arguments for 'del' command")
+      (= command :incr)
+      (if key
+        (let [new-value (increment-number db key)
+              number (atoi (get new-value key))]
+          (if number
+            number
+            "ERR value is not an integer or out of range"))
+        "ERR wrong number of arguments for 'incr' command")
+      :else "Unknown command")))
 
 (defn handle-client
-  " write me ..."
-  [channel client-socket]
-  (a/go (loop [resp-channel (a/chan)]
+  "Read from a connected client, and handles the various commands accepted by the server"
+  [client-socket db]
+  (a/go (loop []
           (let [request (.readLine (io/reader client-socket))
                 writer (io/writer client-socket)]
             (if (nil? request)
               (do
                 (println "Nil request, closing")
-                (a/close! resp-channel)
                 (.close client-socket))
               (let [parts (string/split request #" ")
                     command (get parts 0)]
                 (cond
                   (contains? valid-commands command)
-                  (let [response (request-for-command command parts resp-channel)]
-                    (when response
-                      (a/>! channel response)
-                      (let [value (a/<! resp-channel)]
-                        (.write writer (str value "\n"))
-                        (.flush writer)
-                        (recur resp-channel))))
+                  (let [request (request-for-command command parts)
+                        value (process-command db request)]
+                    (.write writer (str value "\n"))
+                    (.flush writer)
+                    (recur))
                   (= command "QUIT")
-                  (do
-                    (a/close! resp-channel)
-                    (.close client-socket))
+                  (.close client-socket)
                   :else (do
                           (println "Unknown request:" request)
-                          (recur resp-channel)))))))))
-
-(defn atoi
-  [string]
-  (try
-    (Integer. string)
-    (catch NumberFormatException _e
-      nil)))
-
-(defn update-db
-  [db command key value]
-  (cond
-    (= command :get)
-    (if key
-      (let [value (get db key "")]
-        {:updated db :response value})
-      {:updated db :response "ERR wrong number of arguments for 'get' command"})
-    (= command :set)
-    (if (and key value)
-      {:updated (assoc db key value) :response "OK"}
-      {:updated db :response "ERR wrong number of arguments for 'set' command"})
-    (= command :del)
-    (if key
-      (if (contains? db key)
-        {:updated (dissoc db key) :response "1"}
-        {:updated db :response "0"})
-      {:updated db :response "ERR wrong number of arguments for 'del' command"})
-    (= command :incr)
-    (if key
-      (if (contains? db key)
-        (let [number (atoi (get db key))]
-          (if number
-            {:updated (assoc db key (str (+ number 1))) :response (str (+ number 1))}
-            {:updated db :response "ERR value is not an integer or out of range"}))
-        {:updated (assoc db key "1") :response "1"})
-      {:updated db :response "ERR wrong number of arguments for 'incr' command"})
-    :else {:updated db :response "Unknown command"}))
-
-(defn handle-db
-  [command-channel]
-  (a/go (loop [db (hash-map)]
-          (let [response (a/<! command-channel)
-                type (response :type)
-                key (response :key)
-                value (response :value)
-                chan-resp (response :resp)
-                result (update-db db type key value)
-                new-db (result :updated)
-                response (result :response)]
-            (a/>! chan-resp response)
-            (recur new-db)))))
+                          (recur)))))))))
 
 (defn -main
-  "I don't do a whole lot ... yet."
+  "Start a server and continuously wait for new clients to connect"
   [& _args]
   (println "About to start ...")
-  (let [command-channel (a/chan)]
-    (handle-db command-channel)
+  (let [db (atom {})]
     (with-open [server-socket (ServerSocket. 3000)]
       (loop []
         (let [client-socket (.accept server-socket)]
-          (handle-client command-channel client-socket))
+          (handle-client client-socket db))
         (recur)))))
