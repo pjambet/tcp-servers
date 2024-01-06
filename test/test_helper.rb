@@ -43,6 +43,10 @@ SERVER_CONFIGS = {
     "build" => "(cd kotlin && gradle clean && gradle fatJar)",
     "start" => ["java", "-jar", "kotlin/build/libs/kotlin-1.0-SNAPSHOT-standalone.jar"],
   },
+  "java" => {
+    "build" => "(cd java && javac -d . tcp-server/src/main/java/main/Main.java && jar cfe Main.jar main.Main main/Main.class)",
+    "start" => %w[java -jar java/Main.jar],
+  },
   "clojure" => {
     "build" => "(cd clojure && lein uberjar)",
     "start" => ["java", "-jar", "clojure/target/uberjar/tcp-server-0.1.0-SNAPSHOT-standalone.jar"],

@@ -77,3 +77,9 @@ kotlin/*.ipr
 kotlin/out/
 kotlin/!**/src/main/**/out/
 kotlin/!**/src/test/**/out/
+
+### Java
+java/tcp-server/.idea/vcs.xml
+java/tcp-server/.idea/misc.xml
+java/tcp-server/.idea/codeStyles/Project.xml
+java/tcp-server/src/main/java/main/main/
