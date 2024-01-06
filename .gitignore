@@ -60,3 +60,20 @@ cpp/server
 zig/server
 zig/zig-out/
 zig/zig-cache/
+
+### Kotlin
+kotlin/.idea/modules.xml
+kotlin/.idea/workspace.xml
+kotlin/.idea/jarRepositories.xml
+kotlin/.idea/compiler.xml
+kotlin/.idea/libraries/
+kotlin/.idea/codeStyles/
+kotlin/.idea/kotlinc.xml
+kotlin/.idea/misc.xml
+kotlin/.idea/vcs.xml
+kotlin/*.iws
+kotlin/*.iml
+kotlin/*.ipr
+kotlin/out/
+kotlin/!**/src/main/**/out/
+kotlin/!**/src/test/**/out/
