@@ -14,7 +14,7 @@ Used as a playground, to learn new languages
 - [x] ✅ [Node](./node)
 - [x] ✅ [Python](./python)
 - [x] ✅ [Ruby](./ruby)
-- [x] 🚧 [Rust](./rust)
+- [x] ✅ [Rust](./rust)
 - [ ] [Scala 2](./scala2) (_Skeleton only_)
 - [ ] [Scala 3](./scala3) (_Skeleton only_)
 - [ ] [zig](./zig) (_Skeleton only_)

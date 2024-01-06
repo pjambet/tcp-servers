@@ -170,8 +170,42 @@ fn handle_connection(mut stream: &TcpStream, db: &mut HashMap<String, String>) -
         } else {
             "\n".to_string()
         }
+    } else if request.starts_with("DEL") {
+        let parts: Vec<&str> = request.split(|c| char::is_ascii_whitespace(&c)).collect();
+        if parts.len() > 2 {
+            let key = parts[1];
+            if db.contains_key(key) {
+                db.remove(key);
+                "1\n".to_string()
+            } else {
+                "0\n".to_string()
+            }
+        } else {
+            "\n".to_string()
+        }
+    } else if request.starts_with("INCR") {
+        let parts: Vec<&str> = request.split(|c| char::is_ascii_whitespace(&c)).collect();
+        if parts.len() > 2 {
+            let key = parts[1];
+            match db.get(key) {
+                Some(existing_string) => match existing_string.parse::<i32>() {
+                    Ok(existing_int) => {
+                        let new_value = existing_int + 1;
+                        db.insert(key.to_string(), new_value.to_string());
+                        new_value.to_string() + "\n"
+                    }
+                    Err(_err) => "ERR value is not an integer or out of range\n".to_string(),
+                },
+                None => {
+                    db.insert(key.to_string(), "1".to_string());
+                    "1\n".to_string()
+                }
+            }
+        } else {
+            "\n".to_string()
+        }
     } else if request.starts_with("QUIT") {
-      return false
+        return false;
     } else {
         "OK\n".to_string()
     };
