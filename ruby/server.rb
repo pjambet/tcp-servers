@@ -20,7 +20,11 @@ def handle_client(db, client)
 
   case
   when command == "GET" && key
-    response = db[key] if key
+    if key
+      response = db[key] || ""
+    else
+      ""
+    end
   when command == "SET" && key && value
     db[key] = value
     response = "OK"
@@ -63,21 +67,20 @@ end
 
 def start_server(port)
   server = TCPServer.new(port)
-  clients = []
+  clients = Set.new
   db = {}
   LOGGER.info "Server started on port: #{ port }"
 
   loop do
-    connected_clients = clients.delete_if(&:closed?)
+    sockets = clients.to_a << server
+    reads, = IO.select(sockets)
 
-    reads, = IO.select([server] + connected_clients)
-
-    reads.each do |socket|
-      if socket == server
+    reads.each do |readable_socket|
+      if readable_socket == server
         client = server.accept
         clients << client
-      elsif handle_client(db, socket).nil?
-        clients.delete(socket.fileno)
+      elsif handle_client(db, readable_socket).nil?
+        clients.delete(readable_socket)
       end
     rescue IOError => e
       LOGGER.error "error handling socket: #{ e }"
