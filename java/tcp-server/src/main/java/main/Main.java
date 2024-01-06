@@ -87,6 +87,42 @@ public class Main {
                 }
                 ByteBuffer response = ByteBuffer.wrap(responseString.getBytes(StandardCharsets.UTF_8));
                 client.write(response);
+            } else if (request.startsWith("DEL")) {
+                String[] parts = request.split(" ");
+                String key = parts[1];
+                if (key == null) {
+                    client.write(ByteBuffer.wrap("\n".getBytes(StandardCharsets.UTF_8)));
+                } else {
+                    if (db.containsKey(key)) {
+                        db.remove(key);
+                        client.write(ByteBuffer.wrap("1\n".getBytes(StandardCharsets.UTF_8)));
+                    } else {
+                        client.write(ByteBuffer.wrap("0\n".getBytes(StandardCharsets.UTF_8)));
+                    }
+                }
+            } else if (request.startsWith("INCR")) {
+                String[] parts = request.split(" ");
+                String key = parts[1];
+                if (key == null) {
+                    client.write(ByteBuffer.wrap("\n".getBytes(StandardCharsets.UTF_8)));
+                } else {
+                    String existingKey = db.get(key);
+                    if (existingKey != null){
+                        try {
+                            Integer existingInt = Integer.valueOf(existingKey);
+                            String newValue = String.valueOf(existingInt + 1);
+                            db.put(key, newValue);
+                            client.write(ByteBuffer.wrap((newValue + "\n").getBytes(StandardCharsets.UTF_8)));
+                        } catch (NumberFormatException e) {
+                            client.write(ByteBuffer.wrap("ERR value is not an integer or out of range\n".getBytes(StandardCharsets.UTF_8)));
+                        }
+                    } else {
+                        db.put(key, "1");
+                        client.write(ByteBuffer.wrap("1\n".getBytes(StandardCharsets.UTF_8)));
+                    }
+                }
+            } else if (request.startsWith("QUIT")) {
+                client.close();
             } else {
                 buffer.flip();
                 client.write(buffer);
