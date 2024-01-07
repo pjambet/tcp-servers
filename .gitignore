@@ -58,6 +58,7 @@ cpp/server
 ### Zig
 
 zig/server
+zig/main
 zig/zig-out/
 zig/zig-cache/
 

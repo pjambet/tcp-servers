@@ -61,7 +61,7 @@ pub fn main() anyerror!void {
                     var conn = try server.accept();
                     std.debug.print("conn handle {?}\n", .{conn.stream.handle});
                     try clients.put(conn.stream.handle, conn);
-                    _ = try conn.stream.write("server: welcome to the chat server\n");
+                    // _ = try conn.stream.write("server: welcome to the chat server\n");
                 } else {
                     var conn = clients.get(pollfd.fd).?;
                     var buf: [100]u8 = undefined;
@@ -117,8 +117,8 @@ pub fn main() anyerror!void {
                         std.debug.print("value: '{s}'\n", .{value});
                         std.debug.print("value: '{d}'\n", .{value});
 
-                        var list = ArrayList(u8).init(allocator);
-                        defer list.deinit();
+                        // var list = ArrayList(u8).init(allocator);
+                        // defer list.deinit();
 
                         var key2 = try allocator.dupe(u8, key);
                         var value2 = try allocator.dupe(u8, value);
@@ -130,8 +130,8 @@ pub fn main() anyerror!void {
                             std.debug.print("key: {s}, value: '{s}'\n", .{ pair.key_ptr.*, pair.value_ptr.* });
                         }
 
-                        _ = try std.fmt.format(list.writer(), "{s}\n", .{value});
-                        _ = try conn.stream.write(list.items);
+                        // _ = try std.fmt.format(list.writer(), "{s}\n", .{value});
+                        _ = try conn.stream.write("OK\n");
                     } else if (std.mem.eql(u8, command, "DEL")) {
                         // var removed = db.remove(key);
                         var removed = db.swapRemove(key);

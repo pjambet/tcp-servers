@@ -51,6 +51,10 @@ SERVER_CONFIGS = {
     "build" => "(cd clojure && lein uberjar)",
     "start" => ["java", "-jar", "clojure/target/uberjar/tcp-server-0.1.0-SNAPSHOT-standalone.jar"],
   },
+  "zig" => {
+    "build" => "(cd zig && zig build-exe src/main.zig)",
+    "start" => ["./zig/main"],
+  },
 }
 
 SERVER_CONFIG = SERVER_CONFIGS[ENV["SERVER"]&.downcase]
