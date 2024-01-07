@@ -2,7 +2,7 @@ import java.net.{ServerSocket, Socket}
 import java.io.{BufferedReader, InputStreamReader, PrintWriter}
 import java.util.concurrent.{ConcurrentHashMap, Executors}
 import scala.collection.mutable
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{Await, ExecutionContext, Future, blocking}
 import scala.concurrent.duration.Duration
 
 object Main {
@@ -19,15 +19,19 @@ object Main {
       executionContext: ExecutionContext
   ): Future[Unit] = {
     Future {
-      while (true) {
-        val input = new BufferedReader(new InputStreamReader(client.getInputStream)).readLine()
-        if (input == null) {
-          client.close()
-          return Future.successful(())
-        }
+      blocking {
+        while (true) {
+          val input = new BufferedReader(
+            new InputStreamReader(client.getInputStream)
+          ).readLine()
+          if (input == null) {
+            client.close()
+            return Future.successful(())
+          }
 
-        val output = new PrintWriter(client.getOutputStream, true)
-        output.println(s"Hello: $input 👋")
+          val output = new PrintWriter(client.getOutputStream, true)
+          output.println(s"Hello: $input 👋")
+        }
       }
     }(executionContext)
   }
