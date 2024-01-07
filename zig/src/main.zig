@@ -75,6 +75,13 @@ pub fn main() anyerror!void {
                     while (partsIterator.next()) |part| {
                         try parts.append(std.mem.trim(u8, part, "\n"));
                     }
+
+                    if (std.mem.eql(u8, msg[0..4], "QUIT")) {
+                        conn.stream.close();
+                        _ = clients.orderedRemove(pollfd.fd);
+                        break;
+                    }
+
                     if (parts.items.len < 2) {
                         _ = try conn.stream.write("too short\n");
                         break;
@@ -135,7 +142,28 @@ pub fn main() anyerror!void {
                         }
                     } else if (std.mem.eql(u8, command, "INCR")) {
                         std.debug.print("message is INCR\n", .{});
-                        _ = try conn.stream.write("server: You said something, thanks\n");
+                        var key2 = try allocator.dupe(u8, key);
+                        if (db.contains(key)) {
+                            var response = db.get(key).?;
+                            if (std.fmt.parseInt(i32, response, 10)) |number| {
+                                var new_value = number + 1;
+                                var list = ArrayList(u8).init(allocator);
+
+                                _ = try std.fmt.format(list.writer(), "{?}", .{new_value});
+                                std.debug.print("putting {s}\n", .{list.items});
+                                _ = try db.put(key2, list.items);
+
+                                var list2 = ArrayList(u8).init(allocator);
+                                defer list2.deinit();
+                                _ = try std.fmt.format(list2.writer(), "{?}\n", .{new_value});
+                                _ = try conn.stream.write(list2.items);
+                            } else |_| {
+                                _ = try conn.stream.write("ERR value is not an integer or out of range\n");
+                            }
+                        } else {
+                            _ = try db.put(key2, "1");
+                            _ = try conn.stream.write("1\n");
+                        }
                     } else {
                         std.debug.print("unknown command\n", .{});
                         _ = try conn.stream.write("server: Unknown command\n");
