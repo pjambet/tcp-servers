@@ -28,10 +28,11 @@ pub fn main() anyerror!void {
     var clients = std.AutoArrayHashMap(i32, net.StreamServer.Connection).init(allocator);
     defer clients.deinit();
 
-    var db = std.StringHashMap(i32).init(allocator);
+    // var db = std.StringHashMap(void).init(allocator);
+    var db = std.StringArrayHashMap([]const u8).init(allocator);
     defer db.deinit();
-    // try db.put("foo", "bar");
-    try db.put("foo", 123);
+    try db.put("foo", "bar");
+    // try db.put("foo", undefined);
 
     while (true) {
         pollfds.clearRetainingCapacity();
@@ -42,11 +43,12 @@ pub fn main() anyerror!void {
             try pollfds.append(.{ .fd = client.stream.handle, .events = os.POLL.IN, .revents = 0 });
         }
 
-        var poll_result = try os.poll(pollfds.items, 15000);
+        var poll_result = try os.poll(pollfds.items, 35000);
         std.debug.print("Poll result {?}\n", .{poll_result});
         for (pollfds.items) |pollfd| {
             std.debug.print("items after poll {?}\n", .{pollfd});
         }
+
         // std.debug.print("items after poll {?}\n", .{pollfds.values[0]});
         for (pollfds.items) |pollfd| {
             if (pollfd.revents & os.POLL.HUP != 0) {
@@ -69,7 +71,7 @@ pub fn main() anyerror!void {
                     std.debug.print("received: {s}\n", .{msg});
                     var partsIterator = std.mem.splitScalar(u8, msg, ' ');
                     var parts = ArrayList([]const u8).init(allocator);
-                    defer parts.deinit();
+                    // defer parts.deinit();
                     while (partsIterator.next()) |part| {
                         try parts.append(std.mem.trim(u8, part, "\n"));
                     }
@@ -88,12 +90,13 @@ pub fn main() anyerror!void {
                         defer list.deinit();
                         var iter = db.iterator();
                         while (iter.next()) |pair| {
-                            std.debug.print("key: {s}, value: '{?}'\n", .{ pair.key_ptr.*, pair.value_ptr.* });
+                            std.debug.print("key: {s}, value: '{s}'\n", .{ pair.key_ptr.*, pair.value_ptr.* });
                         }
                         var response = db.get(key); // orelse "";
                         if (response) |val| {
-                            std.debug.print("response: {?}\n", .{val});
-                            _ = try std.fmt.format(list.writer(), "{?}\n", .{val});
+                            std.debug.print("response: {s}\n", .{val});
+                            _ = try std.fmt.format(list.writer(), "{s}\n", .{val});
+                            // _ = try std.fmt.format(list.writer(), "\n", .{});
                             _ = try conn.stream.write(list.items);
                         } else {
                             _ = try conn.stream.write("\n");
@@ -110,20 +113,21 @@ pub fn main() anyerror!void {
                         var list = ArrayList(u8).init(allocator);
                         defer list.deinit();
 
-                        // var k2 = try allocator.create([]const u8);
-                        // k2.foo();
-
-                        _ = try db.put(key, 456);
+                        var key2 = try allocator.dupe(u8, key);
+                        var value2 = try allocator.dupe(u8, value);
+                        _ = try db.put(key2, value2);
+                        std.debug.print("keys: {s}\n", .{db.keys()});
                         var iter = db.iterator();
                         while (iter.next()) |pair| {
                             std.debug.print("key: {s}, value: '{s}'\n", .{ pair.key_ptr, pair.value_ptr });
-                            std.debug.print("key: {s}, value: '{?}'\n", .{ pair.key_ptr.*, pair.value_ptr.* });
+                            std.debug.print("key: {s}, value: '{s}'\n", .{ pair.key_ptr.*, pair.value_ptr.* });
                         }
 
-                        _ = try std.fmt.format(list.writer(), "{?}\n", .{value});
+                        _ = try std.fmt.format(list.writer(), "{s}\n", .{value});
                         _ = try conn.stream.write(list.items);
                     } else if (std.mem.eql(u8, command, "DEL")) {
-                        var removed = db.remove(key);
+                        // var removed = db.remove(key);
+                        var removed = db.swapRemove(key);
                         if (removed) {
                             _ = try conn.stream.write("1\n");
                         } else {
@@ -136,6 +140,8 @@ pub fn main() anyerror!void {
                         std.debug.print("unknown command\n", .{});
                         _ = try conn.stream.write("server: Unknown command\n");
                     }
+
+                    parts.deinit();
                 }
             }
         }
