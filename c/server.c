@@ -8,10 +8,19 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <sys/select.h>
+#include <signal.h>
 
 #define MAX 80
 #define PORT 3000
 #define SA struct sockaddr
+
+static volatile int keepRunning = 1;
+
+void intHandler(int dummy)
+{
+  printf("Graceful close\n");
+  keepRunning = 0;
+}
 
 typedef struct ht ht;
 
@@ -349,60 +358,6 @@ bool ht_next(hti *it)
   return false;
 }
 
-struct string_header
-{
-  long len;
-  char buf[];
-};
-
-typedef char *string;
-
-// static inline int sdsHdrSize(char type)
-int stringHeaderSize()
-{
-  return sizeof(struct string_header);
-}
-
-string stringnewlen(const void *init, size_t initlen)
-{
-  struct string_header *sh;
-
-  sh = malloc(sizeof(struct string_header) + initlen + 1);
-  if (sh == NULL)
-    return NULL;
-  sh->len = initlen;
-  // sh->free = 0;
-  if (initlen)
-  {
-    if (init)
-      memcpy(sh->buf, init, initlen);
-    else
-      memset(sh->buf, 0, initlen);
-  }
-  sh->buf[initlen] = '\0';
-  return (char *)sh->buf;
-}
-
-void sdsfree(string s)
-{
-  if (s == NULL)
-    return;
-  free((char *)s - stringHeaderSize());
-}
-
-unsigned long hash(unsigned char *str)
-{
-  unsigned long hash = 5381;
-  int c;
-
-  while ((c = *str++))
-  {
-    hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-  }
-
-  return hash;
-}
-
 void exit_nomem(void)
 {
   fprintf(stderr, "out of memory\n");
@@ -411,124 +366,6 @@ void exit_nomem(void)
 
 int main()
 {
-
-  ht *counts = ht_create();
-  if (counts == NULL)
-  {
-    exit_nomem();
-  }
-
-  // Read next word from stdin (at most 100 chars long).
-  // char word[101];
-  // while (scanf("%100s", word) != EOF)
-  // {
-  //   // Look up word.
-  //   void *value = ht_get(counts, word);
-  //   if (value != NULL)
-  //   {
-  //     // Already exists, increment int that value points to.
-  //     int *pcount = (int *)value;
-  //     (*pcount)++;
-  //     continue;
-  //   }
-
-  //   // Word not found, allocate space for new int and set to 1.
-  //   int *pcount = malloc(sizeof(int));
-  //   if (pcount == NULL)
-  //   {
-  //     exit_nomem();
-  //   }
-  //   *pcount = 1;
-  //   if (ht_set(counts, word, pcount) == NULL)
-  //   {
-  //     exit_nomem();
-  //   }
-  // }
-
-  char *key1;
-  key1 = (char *)malloc(10 * sizeof(char));
-  printf("key: %p\n", key1);
-  strcpy(key1, "9\0");
-
-  char *value1;
-  value1 = (char *)malloc(10 * sizeof(char));
-  printf("value: %p\n", value1);
-  strcpy(value1, "987654321\0");
-
-  char *key2;
-  key2 = (char *)malloc(10 * sizeof(char));
-  printf("key: %p\n", key2);
-  strcpy(key2, "10\0");
-
-  char *value2;
-  value2 = (char *)malloc(10 * sizeof(char));
-  printf("value: %p\n", value2);
-  strcpy(value2, "bar\0");
-
-  char *key3;
-  key3 = (char *)malloc(10 * sizeof(char));
-  printf("key: %p\n", key3);
-  strcpy(key3, "29\0");
-
-  char *value3;
-  value3 = (char *)malloc(10 * sizeof(char));
-  printf("value: %p\n", value3);
-  strcpy(value3, "Hello!\0");
-
-  char *key4;
-  key4 = (char *)malloc(10 * sizeof(char));
-  printf("key: %p\n", key4);
-  strcpy(key4, "And this?\0");
-
-  char *value4;
-  value4 = (char *)malloc(10 * sizeof(char));
-  printf("value: %p\n", value4);
-  strcpy(value4, "Hello!\0");
-
-  ht_set(counts, key1, value1);
-  ht_set(counts, key2, value2);
-  ht_set(counts, key3, value3);
-  ht_set(counts, key4, value4);
-
-  bool deletion = ht_delete(counts, key2);
-  printf("deletion: %d\n", deletion);
-  printf("==========\n");
-
-  // Print out words and frequencies, freeing values as we go.
-  printf("iter\n");
-  hti it = ht_iterator(counts);
-  while (ht_next(&it))
-  {
-    printf("%s: %s\n", it.key, it.value);
-  }
-
-  printf("==========\n");
-
-  for (int i = 0; i < 30; i++)
-  {
-    char s[10];
-    sprintf(s, "%d", i);
-    size_t index = ht_index(counts->capacity, s);
-    printf("i: %d, s: '%s', index: %zu\n", i, s, index);
-  }
-
-  printf("==========\n");
-
-  for (int i = 0; i < counts->capacity; i++)
-  {
-    printf("i: %02d, key: '%p', *key: %s, value: '%p', *value: %s\n", i, counts->entries[i].key, counts->entries[i].key, counts->entries[i].value, counts->entries[i].value);
-  }
-
-  printf("==========\n");
-
-  // Show the number of unique words.
-  printf("length: %d\n", (int)ht_length(counts));
-
-  printf("==========\n");
-  ht_destroy(counts);
-
-  // return 0;
-
   socklen_t client_address_length;
   int server_socket_file_descriptor, client_socket_file_descriptor;
   struct sockaddr_in server_address, client_address;
@@ -585,9 +422,11 @@ int main()
 
   ht *clients = ht_create();
   ht *db = ht_create();
-  bool should_quit = false;
+  // bool should_quit = false;
 
-  while (!should_quit)
+  signal(SIGINT, intHandler);
+
+  while (keepRunning)
   {
     FD_ZERO(&rfds);
     FD_SET(server_socket_file_descriptor, &rfds);
@@ -754,7 +593,7 @@ int main()
             }
             else if (strlen(message_buffer) == 4 && strncmp(message_buffer, "QUIT", 4) == 0)
             {
-              should_quit = true;
+              keepRunning = false;
               break;
             }
             else
