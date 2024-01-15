@@ -276,10 +276,14 @@ bool ht_delete(ht *table, const char *key)
     if (strcmp(key, table->entries[index].key) == 0)
     {
       // Found key, delete it and return true.
+      printf("free-ing key: %p\n", table->entries[index].key);
       free((void *)table->entries[index].key);
       table->entries[index].key = NULL;
+
+      printf("free-ing value: %p\n", table->entries[index].value);
       free((void *)table->entries[index].value);
       table->entries[index].value = NULL;
+
       ht_fill_gap(table, index);
       printf("filled\n");
       table->length--;
@@ -586,6 +590,9 @@ int main()
   {
     FD_ZERO(&rfds);
     FD_SET(server_socket_file_descriptor, &rfds);
+    int *clients_marked_for_deletion;
+    clients_marked_for_deletion = (int *)malloc(clients->length);
+    int clients_marked_for_deletion_count = 0;
 
     for (int i = 0; i < clients->capacity; i++)
     {
@@ -636,7 +643,11 @@ int main()
         char *fd_key;
         fd_key = (char *)malloc(10 * sizeof(char));
         sprintf(fd_key, "%d", client_socket_file_descriptor);
-        ht_set(clients, fd_key, "");
+
+        char *value;
+        value = (char *)malloc(sizeof(char));
+
+        ht_set(clients, fd_key, value);
         FD_CLR(server_socket_file_descriptor, &rfds);
 
         // char message_buffer[MAX];
@@ -662,7 +673,7 @@ int main()
 
             char message_buffer[MAX];
             ssize_t res = read(fd, message_buffer, sizeof(message_buffer));
-            printf("res: %zd", res);
+            printf("res: %zd\n", res);
             if (res == -1)
             {
               // char *fd_key;
@@ -671,6 +682,9 @@ int main()
               // ht_delete(clients, fd_key);
               // free(fd_key);
               close(fd);
+              clients_marked_for_deletion[clients_marked_for_deletion_count] = fd;
+              clients_marked_for_deletion_count++;
+              printf("clients_marked_for_deletion_count: %d\n", clients_marked_for_deletion_count);
               continue;
             }
             message_buffer[strcspn(message_buffer, "\n")] = 0;
@@ -714,6 +728,17 @@ int main()
       perror("select");
       exit(EXIT_FAILURE);
     };
+
+    for (int i = 0; i < clients_marked_for_deletion_count; i++)
+    {
+      char *fd_key;
+      fd_key = (char *)malloc(10 * sizeof(char));
+      sprintf(fd_key, "%d", clients_marked_for_deletion[i]);
+      printf("Deleting client with fd: %s\n", fd_key);
+      ht_delete(clients, fd_key);
+      free(fd_key);
+    }
+    free(clients_marked_for_deletion);
   }
 
   // After chatting close the socket
