@@ -19,6 +19,10 @@ SERVER_CONFIG = nil
 PORT = "3000"
 
 SERVER_CONFIGS = {
+  "c" => {
+    "build" => "(cd c && make clean && make)",
+    "start" => ["./c/server"],
+  },
   "ruby" => {
     "build" => nil,
     "start" => ["ruby", "ruby/server.rb"],

@@ -101,7 +101,7 @@ describe "A server" do
             socket.puts "GET #{ SecureRandom.uuid }"
           end
         ensure
-          socket.close
+          socket&.close
         end
       end
 
