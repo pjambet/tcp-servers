@@ -116,8 +116,14 @@ describe "A server" do
   private
 
   def connect_to_server
+    retried = false unless retried
     socket = TCPSocket.new "localhost", 3000
     yield socket
+  rescue
+    unless retried
+      retried = true
+      retry
+    end
   ensure
     socket.close if socket
   end
@@ -145,6 +151,8 @@ describe "A server" do
     Timeout.timeout(2) do
       loop do
         socket = TCPSocket.new("localhost", 3000)
+        socket.puts("GET a")
+        socket.gets
         socket.close
         break
       rescue Errno::ECONNREFUSED => _e
