@@ -7,6 +7,7 @@
 #include <arpa/inet.h> // For inet_ntop
 #include <stdbool.h>
 #include <assert.h>
+#include <sys/select.h>
 
 #define MAX 80
 #define PORT 3000
@@ -91,13 +92,18 @@ static uint64_t hash_key(const char *key)
   return hash;
 }
 
+static size_t ht_index(size_t capacity, const char *key)
+{
+  // AND hash with capacity-1 to ensure it's within entries array.
+  uint64_t hash = hash_key(key);
+  return (size_t)(hash & (uint64_t)(capacity - 1));
+}
+
 // Get item with given key (NUL-terminated) from hash table. Return
 // value (which was set with ht_set), or NULL if key not found.
 const char *ht_get(ht *table, const char *key)
 {
-  // AND hash with capacity-1 to ensure it's within entries array.
-  uint64_t hash = hash_key(key);
-  size_t index = (size_t)(hash & (uint64_t)(table->capacity - 1));
+  size_t index = ht_index(table->capacity, key);
 
   // Loop till we find an empty entry.
   while (table->entries[index].key != NULL)
@@ -121,9 +127,7 @@ const char *ht_get(ht *table, const char *key)
 static const char *ht_set_entry(ht_entry *entries, size_t capacity,
                                 const char *key, const char *value, size_t *plength)
 {
-  // AND hash with capacity-1 to ensure it's within entries array.
-  uint64_t hash = hash_key(key);
-  size_t index = (size_t)(hash & (uint64_t)(capacity - 1));
+  size_t index = ht_index(capacity, key);
 
   // Loop till we find an empty entry.
   while (entries[index].key != NULL)
@@ -228,8 +232,7 @@ void ht_fill_gap(ht *table, size_t starting_index)
     // j = current_index
     // k = entry_real_index
     ht_entry entry = table->entries[current_index];
-    uint64_t hash = hash_key(entry.key);
-    size_t entry_real_index = (size_t)(hash & (uint64_t)(table->capacity - 1));
+    size_t entry_real_index = ht_index(table->capacity, entry.key);
     printf("current_index: %zu\n", current_index);
 
     // For all records in a cluster, there must be no vacant slots between their
@@ -260,9 +263,7 @@ void ht_fill_gap(ht *table, size_t starting_index)
 
 bool ht_delete(ht *table, const char *key)
 {
-  // AND hash with capacity-1 to ensure it's within entries array.
-  uint64_t hash = hash_key(key);
-  size_t index = (size_t)(hash & (uint64_t)(table->capacity - 1));
+  size_t index = ht_index(table->capacity, key);
   printf("Deleting %s\n", key);
   if (table->entries[index].key == NULL)
   {
@@ -501,11 +502,10 @@ int main()
 
   for (int i = 0; i < 30; i++)
   {
-    // char s[10];
-    // sprintf(s, "%d", i);
-    // uint64_t hash = hash_key(s);
-    // size_t index = (size_t)(hash & (uint64_t)(INITIAL_CAPACITY - 1));
-    // printf("i: %d, s: '%s', index: %zu\n", i, s, index);
+    char s[10];
+    sprintf(s, "%d", i);
+    size_t index = ht_index(counts->capacity, s);
+    printf("i: %d, s: '%s', index: %zu\n", i, s, index);
   }
 
   printf("==========\n");
@@ -523,7 +523,7 @@ int main()
   printf("==========\n");
   ht_destroy(counts);
 
-  return 0;
+  // return 0;
 
   socklen_t client_address_length;
   int server_socket_file_descriptor, client_socket_file_descriptor;
@@ -531,6 +531,11 @@ int main()
 
   // socket create and verification
   server_socket_file_descriptor = socket(AF_INET, SOCK_STREAM, 0);
+  if (setsockopt(server_socket_file_descriptor, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) < 0)
+  {
+    perror("setsockopt(SO_REUSEADDR) failed");
+    exit(1);
+  }
   if (server_socket_file_descriptor == -1)
   {
     printf("socket creation failed...\n");
@@ -566,32 +571,150 @@ int main()
   }
   else
   {
-    printf("Server listening..\n");
+    printf("Server listening: %d..\n", server_socket_file_descriptor);
   }
+
   client_address_length = sizeof(client_address);
+  fd_set rfds;
+  struct timeval tv;
+  int max_fd = server_socket_file_descriptor;
 
-  // Accept the data packet from client and verification
-  client_socket_file_descriptor = accept(server_socket_file_descriptor, (SA *)&client_address, &client_address_length);
-  if (client_socket_file_descriptor < 0)
+  ht *clients = ht_create();
+  ht *db = ht_create();
+
+  while (1)
   {
-    printf("server accept failed: %d,%d...\n", client_socket_file_descriptor, errno);
-    exit(0);
-  }
-  else
-  {
-    printf("server accept the client...\n");
-    char human_readable_address[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &client_address.sin_addr, human_readable_address, sizeof(human_readable_address));
-    printf("Client address: %s\n", human_readable_address);
-  }
+    FD_ZERO(&rfds);
+    FD_SET(server_socket_file_descriptor, &rfds);
 
-  char message_buffer[MAX];
-  read(client_socket_file_descriptor, message_buffer, sizeof(message_buffer));
-  printf("From Client: %s\n", message_buffer);
-  bzero(message_buffer, MAX);
+    for (int i = 0; i < clients->capacity; i++)
+    {
+      printf("i: %02d, key: '%p', *key: %s, value: '%p', *value: %s\n", i, clients->entries[i].key, clients->entries[i].key, clients->entries[i].value, clients->entries[i].value);
+    }
 
-  strcpy(message_buffer, "Hello, this is Server!");
-  write(client_socket_file_descriptor, message_buffer, sizeof(message_buffer));
+    for (int i = 0; i < db->capacity; i++)
+    {
+      printf("i: %02d, key: '%p', *key: %s, value: '%p', *value: %s\n", i, db->entries[i].key, db->entries[i].key, db->entries[i].value, db->entries[i].value);
+    }
+
+    hti it = ht_iterator(clients);
+    while (ht_next(&it))
+    {
+      printf("%s: '%s'\n", it.key, it.value);
+      int fd;
+      sscanf(it.key, "%d", &fd);
+      FD_SET(fd, &rfds);
+      if (fd > max_fd)
+      {
+        max_fd = fd;
+      }
+    }
+
+    tv.tv_sec = 15;
+    tv.tv_usec = 0;
+    printf("selecting...\n");
+    int ns = select(max_fd + 1, &rfds, NULL, NULL, &tv);
+    printf("selected: %d\n", ns);
+    if (ns > 0)
+    {
+      if (FD_ISSET(server_socket_file_descriptor, &rfds))
+      {
+        // Accept the data packet from client and verification
+        client_socket_file_descriptor = accept(server_socket_file_descriptor, (SA *)&client_address, &client_address_length);
+        if (client_socket_file_descriptor < 0)
+        {
+          printf("server accept failed: %d,%d...\n", client_socket_file_descriptor, errno);
+          exit(0);
+        }
+        else
+        {
+          printf("server accept the client...\n");
+          char human_readable_address[INET_ADDRSTRLEN];
+          inet_ntop(AF_INET, &client_address.sin_addr, human_readable_address, sizeof(human_readable_address));
+          printf("Client address: %s\n", human_readable_address);
+        }
+        char *fd_key;
+        fd_key = (char *)malloc(10 * sizeof(char));
+        sprintf(fd_key, "%d", client_socket_file_descriptor);
+        ht_set(clients, fd_key, "");
+        FD_CLR(server_socket_file_descriptor, &rfds);
+
+        // char message_buffer[MAX];
+        // read(client_socket_file_descriptor, message_buffer, sizeof(message_buffer));
+        // printf("From Client: %s\n", message_buffer);
+        // bzero(message_buffer, MAX);
+
+        // strcpy(message_buffer, "Hello, this is Server!");
+        // write(client_socket_file_descriptor, message_buffer, sizeof(message_buffer));
+      }
+      else
+      {
+        hti it2 = ht_iterator(clients);
+        while (ht_next(&it2))
+        {
+          printf("%s: %s\n", it2.key, it2.value);
+          int fd;
+          sscanf(it2.key, "%d", &fd);
+          if (FD_ISSET(fd, &rfds))
+          {
+            printf("Handling message from %d\n", fd);
+            FD_CLR(fd, &rfds);
+
+            char message_buffer[MAX];
+            ssize_t res = read(fd, message_buffer, sizeof(message_buffer));
+            printf("res: %zd", res);
+            if (res == -1)
+            {
+              // char *fd_key;
+              // fd_key = (char *)malloc(10 * sizeof(char));
+              // sprintf(fd_key, "%d", client_socket_file_descriptor);
+              // ht_delete(clients, fd_key);
+              // free(fd_key);
+              close(fd);
+              continue;
+            }
+            message_buffer[strcspn(message_buffer, "\n")] = 0;
+            printf("From Client: '%s'\n", message_buffer);
+
+            const char *result;
+            result = ht_get(db, "123");
+            if (result != NULL)
+            {
+              char response[MAX];
+              strcpy(response, result);
+              strcat(response, "\n");
+
+              send(fd, response, strlen(response), 0);
+            }
+
+            if (ht_get(db, "123") == NULL)
+            {
+              printf("Initializing 123\n");
+              char *key;
+              key = (char *)malloc(10 * sizeof(char));
+              printf("key: %p\n", key);
+              strcpy(key, "123\0");
+
+              char *value;
+              value = (char *)malloc(10 * sizeof(char));
+              printf("value: %p\n", value);
+              strcpy(value, "Hello!\0");
+              ht_set(db, key, value);
+            }
+          }
+        }
+      }
+    }
+    else if (ns < 0 && errno == EINTR)
+    {
+      break;
+    }
+    else if (ns < 0)
+    {
+      perror("select");
+      exit(EXIT_FAILURE);
+    };
+  }
 
   // After chatting close the socket
   printf("Closing server_socket_file_descriptor\n");
