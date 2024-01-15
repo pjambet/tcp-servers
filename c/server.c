@@ -202,11 +202,11 @@ static bool ht_expand(ht *table)
 // called). Return address of copied key, or NULL if out of memory.
 const char *ht_set(ht *table, const char *key, const char *value)
 {
-  assert(value != NULL);
-  if (value == NULL)
-  {
-    return NULL;
-  }
+  // assert(value != NULL);
+  // if (value == NULL)
+  // {
+  //   return NULL;
+  // }
 
   // If length will exceed half of current capacity, expand it.
   if (table->length >= table->capacity / 2)
@@ -585,8 +585,9 @@ int main()
 
   ht *clients = ht_create();
   ht *db = ht_create();
+  bool should_quit = false;
 
-  while (1)
+  while (!should_quit)
   {
     FD_ZERO(&rfds);
     FD_SET(server_socket_file_descriptor, &rfds);
@@ -644,10 +645,7 @@ int main()
         fd_key = (char *)malloc(10 * sizeof(char));
         sprintf(fd_key, "%d", client_socket_file_descriptor);
 
-        char *value;
-        value = (char *)malloc(sizeof(char));
-
-        ht_set(clients, fd_key, value);
+        ht_set(clients, fd_key, NULL);
         FD_CLR(server_socket_file_descriptor, &rfds);
 
         // char message_buffer[MAX];
@@ -689,32 +687,105 @@ int main()
             }
             message_buffer[strcspn(message_buffer, "\n")] = 0;
             printf("From Client: '%s'\n", message_buffer);
+            printf("From Client: '%lu'\n", strlen(message_buffer));
+            printf("strncmp(message_buffer, 'QUIT', 4): '%d'\n", strncmp(message_buffer, "QUIT", 4));
 
-            const char *result;
-            result = ht_get(db, "123");
-            if (result != NULL)
+            if (strlen(message_buffer) >= 4 && strncmp(message_buffer, "GET", 3) == 0)
             {
-              char response[MAX];
-              strcpy(response, result);
-              strcat(response, "\n");
+              const char *result;
 
-              send(fd, response, strlen(response), 0);
+              char *part;
+              part = strtok(message_buffer, " ");
+              char *command = part;
+              printf("command: '%s'\n", command);
+              part = strtok(NULL, " ");
+              char *key = part;
+              printf("key: '%s'\n", key);
+
+              result = ht_get(db, key);
+              if (result != NULL)
+              {
+                char response[MAX];
+                strcpy(response, result);
+                strcat(response, "\n");
+
+                write(fd, response, strlen(response));
+              }
+              else
+              {
+                write(fd, "\n", 1);
+              }
+            }
+            else if (strlen(message_buffer) >= 4 && strncmp(message_buffer, "SET", 3) == 0)
+            {
+              char *part;
+              part = strtok(message_buffer, " ");
+              char *command = part;
+              printf("command: '%s'\n", command);
+              part = strtok(NULL, " ");
+              char *key = part;
+              printf("key: '%s'\n", key);
+              part = strtok(NULL, " ");
+              char *value = part;
+              printf("value: '%s'\n", value);
+
+              if (key != NULL && value != NULL)
+              {
+                printf("Initializing 123\n");
+                char *ht_key;
+                ht_key = (char *)malloc(10 * sizeof(char));
+                printf("ht_key: %p\n", ht_key);
+                strcpy(ht_key, key);
+
+                char *ht_value;
+                ht_value = (char *)malloc(10 * sizeof(char));
+                printf("ht_value: %p\n", ht_value);
+                strcpy(ht_value, value);
+                ht_set(db, ht_key, ht_value);
+              }
+
+              write(fd, "OK\n", 3);
+            }
+            else if (strlen(message_buffer) >= 4 && strncmp(message_buffer, "DEL", 3) == 0)
+            {
+            }
+            else if (strlen(message_buffer) >= 5 && strncmp(message_buffer, "INCR", 4) == 0)
+            {
+            }
+            else if (strlen(message_buffer) == 4 && strncmp(message_buffer, "QUIT", 4) == 0)
+            {
+              should_quit = true;
+              break;
+            }
+            else
+            {
             }
 
-            if (ht_get(db, "123") == NULL)
-            {
-              printf("Initializing 123\n");
-              char *key;
-              key = (char *)malloc(10 * sizeof(char));
-              printf("key: %p\n", key);
-              strcpy(key, "123\0");
+            // const char *result;
+            // result = ht_get(db, "123");
+            // if (result != NULL)
+            // {
+            //   char response[MAX];
+            //   strcpy(response, result);
+            //   strcat(response, "\n");
 
-              char *value;
-              value = (char *)malloc(10 * sizeof(char));
-              printf("value: %p\n", value);
-              strcpy(value, "Hello!\0");
-              ht_set(db, key, value);
-            }
+            //   write(fd, response, strlen(response));
+            // }
+
+            // if (ht_get(db, "123") == NULL)
+            // {
+            //   printf("Initializing 123\n");
+            //   char *key;
+            //   key = (char *)malloc(10 * sizeof(char));
+            //   printf("key: %p\n", key);
+            //   strcpy(key, "123\0");
+
+            //   char *value;
+            //   value = (char *)malloc(10 * sizeof(char));
+            //   printf("value: %p\n", value);
+            //   strcpy(value, "Hello!\0");
+            //   ht_set(db, key, value);
+            // }
           }
         }
       }
@@ -740,6 +811,17 @@ int main()
     }
     free(clients_marked_for_deletion);
   }
+
+  hti it3 = ht_iterator(clients);
+  while (ht_next(&it3))
+  {
+    int fd;
+    sscanf(it3.key, "%d", &fd);
+    close(fd);
+  }
+
+  ht_destroy(clients);
+  ht_destroy(db);
 
   // After chatting close the socket
   printf("Closing server_socket_file_descriptor\n");
