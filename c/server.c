@@ -144,7 +144,10 @@ static const char *ht_set_entry(ht_entry *entries, size_t capacity,
     if (strcmp(key, entries[index].key) == 0)
     {
       // Found key (it already exists), update value.
+      free((void *)entries[index].value);
       entries[index].value = value;
+      free((void *)entries[index].key);
+      entries[index].key = key;
       return entries[index].key;
     }
     // Key wasn't in this slot, move to next (linear probing).
@@ -159,7 +162,9 @@ static const char *ht_set_entry(ht_entry *entries, size_t capacity,
   // Didn't find key, allocate+copy if needed, then insert it.
   if (plength != NULL)
   {
+    printf("duping\n");
     key = strdup(key);
+    printf("duped :%p\n", key);
     if (key == NULL)
     {
       return NULL;
@@ -449,7 +454,7 @@ int main()
     {
       printf("%s: '%s'\n", it.key, it.value);
       int fd;
-      sscanf(it.key, "%d", &fd);
+      fd = atoi(it.key);
       FD_SET(fd, &rfds);
       if (fd > max_fd)
       {
@@ -482,6 +487,7 @@ int main()
         }
         char *fd_key;
         fd_key = (char *)malloc(10 * sizeof(char));
+        printf("key: %s", fd_key);
         sprintf(fd_key, "%d", client_socket_file_descriptor);
 
         ht_set(clients, fd_key, NULL);
@@ -502,7 +508,7 @@ int main()
         {
           printf("%s: %s\n", it2.key, it2.value);
           int fd;
-          sscanf(it2.key, "%d", &fd);
+          fd = atoi(it2.key);
           if (FD_ISSET(fd, &rfds))
           {
             printf("Handling message from %d\n", fd);
@@ -570,14 +576,13 @@ int main()
 
               if (key != NULL && value != NULL)
               {
-                printf("Initializing 123\n");
+                printf("Initializing new entry\n");
                 char *ht_key;
-                ht_key = (char *)malloc(10 * sizeof(char));
-                printf("ht_key: %p\n", ht_key);
+                ht_key = (char *)malloc((strlen(key) + 1) * sizeof(char)); // + 1 for null terminator
                 strcpy(ht_key, key);
 
                 char *ht_value;
-                ht_value = (char *)malloc(10 * sizeof(char));
+                ht_value = (char *)malloc((strlen(value) + 1) * sizeof(char)); // + 1 for null terminator
                 printf("ht_value: %p\n", ht_value);
                 strcpy(ht_value, value);
                 ht_set(db, ht_key, ht_value);
@@ -587,9 +592,80 @@ int main()
             }
             else if (strlen(message_buffer) >= 4 && strncmp(message_buffer, "DEL", 3) == 0)
             {
+              char *part;
+              part = strtok(message_buffer, " ");
+              char *command = part;
+              printf("command: '%s'\n", command);
+              part = strtok(NULL, " ");
+              char *key = part;
+              printf("key: '%s'\n", key);
+
+              bool deleted = ht_delete(db, key);
+              if (deleted)
+              {
+                char *response = "1\n";
+                write(fd, response, strlen(response));
+              }
+              else
+              {
+                char *response = "0\n";
+                write(fd, response, strlen(response));
+              }
             }
             else if (strlen(message_buffer) >= 5 && strncmp(message_buffer, "INCR", 4) == 0)
             {
+              char *part;
+              part = strtok(message_buffer, " ");
+              char *command = part;
+              printf("command: '%s'\n", command);
+              part = strtok(NULL, " ");
+              char *key = part;
+              printf("key: '%s'\n", key);
+
+              const char *existing = ht_get(db, key);
+              if (existing != NULL)
+              {
+                long existing_int;
+                char *ptr;
+                /* reset errno to 0 before call */
+                errno = 0;
+                existing_int = strtol(existing, &ptr, 10);
+                if (errno == 0)
+                {
+                  char *new_value = (char *)malloc((10 + 1) * sizeof(char)); // 10 is enough for a 32 bit int
+                  sprintf(new_value, "%ld", existing_int + 1);
+                  char *response = (char *)malloc((10 + 1 + 1) * sizeof(char)); // 10 is enough for a 32 bit int
+                  strcat(response, new_value);
+
+                  char *new_key = (char *)malloc(strlen(key) * sizeof(char));
+                  strcpy(new_key, key);
+                  ht_set(db, new_key, new_value);
+
+                  strcat(response, "\n");
+                  write(fd, response, strlen(response));
+                  free(response);
+                }
+                else
+                {
+                  char *response = "ERR value is not an integer or out of range\n";
+                  write(fd, response, strlen(response));
+                }
+              }
+              else
+              {
+                char *ht_key;
+                ht_key = (char *)malloc((strlen(key) + 1) * sizeof(char)); // + 1 for null terminator
+                strcpy(ht_key, key);
+
+                char *ht_value;
+                ht_value = (char *)malloc(2 * sizeof(char)); // + 1 for null terminator
+                printf("ht_value: %p\n", ht_value);
+                strcpy(ht_value, "1");
+
+                ht_set(db, ht_key, ht_value);
+                char *response = "1\n";
+                write(fd, response, strlen(response));
+              }
             }
             else if (strlen(message_buffer) == 4 && strncmp(message_buffer, "QUIT", 4) == 0)
             {
@@ -598,33 +674,9 @@ int main()
             }
             else
             {
+              char *response = "Unknown command\n";
+              write(fd, response, strlen(response));
             }
-
-            // const char *result;
-            // result = ht_get(db, "123");
-            // if (result != NULL)
-            // {
-            //   char response[MAX];
-            //   strcpy(response, result);
-            //   strcat(response, "\n");
-
-            //   write(fd, response, strlen(response));
-            // }
-
-            // if (ht_get(db, "123") == NULL)
-            // {
-            //   printf("Initializing 123\n");
-            //   char *key;
-            //   key = (char *)malloc(10 * sizeof(char));
-            //   printf("key: %p\n", key);
-            //   strcpy(key, "123\0");
-
-            //   char *value;
-            //   value = (char *)malloc(10 * sizeof(char));
-            //   printf("value: %p\n", value);
-            //   strcpy(value, "Hello!\0");
-            //   ht_set(db, key, value);
-            // }
           }
         }
       }
@@ -655,12 +707,16 @@ int main()
   while (ht_next(&it3))
   {
     int fd;
-    sscanf(it3.key, "%d", &fd);
+    fd = atoi(it3.key);
     close(fd);
   }
 
   ht_destroy(clients);
   ht_destroy(db);
+
+  char *foo = malloc(sizeof(char));
+  printf("Explicit leak: '%p'\n", foo);
+  free(foo);
 
   // After chatting close the socket
   printf("Closing server_socket_file_descriptor\n");
