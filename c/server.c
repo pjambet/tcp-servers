@@ -17,7 +17,7 @@ typedef struct ht ht;
 typedef struct
 {
   const char *key; // key is NULL if this slot is empty
-  void *value;
+  const char *value;
 } ht_entry;
 
 // Hash table structure: create with ht_create, free with ht_destroy.
@@ -58,7 +58,16 @@ void ht_destroy(ht *table)
   // First free allocated keys.
   for (size_t i = 0; i < table->capacity; i++)
   {
-    free((void *)table->entries[i].key);
+    if (table->entries[i].key != NULL)
+    {
+      printf("free-ing key: '%p'\n", table->entries[i].key);
+      free((void *)table->entries[i].key);
+    }
+    if (table->entries[i].value != NULL)
+    {
+      printf("free-ing value: '%p'\n", table->entries[i].value);
+      free((void *)table->entries[i].value);
+    }
   }
 
   // Then free entries array and table itself.
@@ -84,7 +93,7 @@ static uint64_t hash_key(const char *key)
 
 // Get item with given key (NUL-terminated) from hash table. Return
 // value (which was set with ht_set), or NULL if key not found.
-void *ht_get(ht *table, const char *key)
+const char *ht_get(ht *table, const char *key)
 {
   // AND hash with capacity-1 to ensure it's within entries array.
   uint64_t hash = hash_key(key);
@@ -110,7 +119,7 @@ void *ht_get(ht *table, const char *key)
 }
 
 static const char *ht_set_entry(ht_entry *entries, size_t capacity,
-                                const char *key, void *value, size_t *plength)
+                                const char *key, const char *value, size_t *plength)
 {
   // AND hash with capacity-1 to ensure it's within entries array.
   uint64_t hash = hash_key(key);
@@ -187,7 +196,7 @@ static bool ht_expand(ht *table)
 // be NULL). If not already present in table, key is copied to newly
 // allocated memory (keys are freed automatically when ht_destroy is
 // called). Return address of copied key, or NULL if out of memory.
-const char *ht_set(ht *table, const char *key, void *value)
+const char *ht_set(ht *table, const char *key, const char *value)
 {
   assert(value != NULL);
   if (value == NULL)
@@ -209,6 +218,83 @@ const char *ht_set(ht *table, const char *key, void *value)
                       &table->length);
 }
 
+void ht_fill_gap(ht *table, size_t starting_index)
+{
+  size_t free_slot = starting_index;
+  size_t current_index = (starting_index + 1) % table->capacity;
+  while (table->entries[current_index].key != NULL)
+  {
+    // i = free_slot
+    // j = current_index
+    // k = entry_real_index
+    ht_entry entry = table->entries[current_index];
+    uint64_t hash = hash_key(entry.key);
+    size_t entry_real_index = (size_t)(hash & (uint64_t)(table->capacity - 1));
+    printf("current_index: %zu\n", current_index);
+
+    // For all records in a cluster, there must be no vacant slots between their
+    // natural hash position and their current position (else lookups will
+    // terminate before finding the record). At this point in the pseudocode,
+    // free_slot is a vacant slot that might be invalidating this property for
+    // subsequent records in the cluster. current_index is such a subsequent
+    // record. entry_real_index is the raw hash where the record at
+    // current_index would naturally land in the hash table if there were no
+    // collisions. This test is asking if the record at current_index is
+    // invalidly positioned with respect to the required properties of a cluster
+    // now that free_slot is vacant.
+    bool swap_candidate = current_index > free_slot && (entry_real_index <= free_slot || entry_real_index > current_index);
+    bool wrapped_swap_candidate = current_index < free_slot && (entry_real_index <= free_slot && entry_real_index > current_index);
+    printf("swap_candidate || wrapped_swap_candidate\n");
+    if (swap_candidate || wrapped_swap_candidate)
+    {
+      table->entries[free_slot].key = table->entries[current_index].key;
+      table->entries[current_index].key = NULL;
+      table->entries[free_slot].value = table->entries[current_index].value;
+      table->entries[current_index].value = NULL;
+      free_slot = current_index;
+    }
+    printf("swapped\n");
+    current_index = (current_index + 1) % table->capacity;
+  };
+}
+
+bool ht_delete(ht *table, const char *key)
+{
+  // AND hash with capacity-1 to ensure it's within entries array.
+  uint64_t hash = hash_key(key);
+  size_t index = (size_t)(hash & (uint64_t)(table->capacity - 1));
+  printf("Deleting %s\n", key);
+  if (table->entries[index].key == NULL)
+  {
+    return false;
+  }
+
+  // Loop till we find it
+  while (table->entries[index].key != NULL)
+  {
+    if (strcmp(key, table->entries[index].key) == 0)
+    {
+      // Found key, delete it and return true.
+      free((void *)table->entries[index].key);
+      table->entries[index].key = NULL;
+      free((void *)table->entries[index].value);
+      table->entries[index].value = NULL;
+      ht_fill_gap(table, index);
+      printf("filled\n");
+      table->length--;
+      return true;
+    }
+    // Key wasn't in this slot, move to next (linear probing).
+    index++;
+    if (index >= table->capacity)
+    {
+      // At end of entries array, wrap around.
+      index = 0;
+    }
+  }
+  return false;
+}
+
 // Return number of items in hash table.
 size_t ht_length(ht *table)
 {
@@ -219,7 +305,7 @@ size_t ht_length(ht *table)
 typedef struct
 {
   const char *key; // current key
-  void *value;     // current value
+  const char *value; // current value
 
   // Don't use these fields directly.
   ht *_table;    // reference to hash table being iterated
@@ -328,44 +414,116 @@ int main()
   }
 
   // Read next word from stdin (at most 100 chars long).
-  char word[101];
-  while (scanf("%100s", word) != EOF)
-  {
-    // Look up word.
-    void *value = ht_get(counts, word);
-    if (value != NULL)
-    {
-      // Already exists, increment int that value points to.
-      int *pcount = (int *)value;
-      (*pcount)++;
-      continue;
-    }
+  // char word[101];
+  // while (scanf("%100s", word) != EOF)
+  // {
+  //   // Look up word.
+  //   void *value = ht_get(counts, word);
+  //   if (value != NULL)
+  //   {
+  //     // Already exists, increment int that value points to.
+  //     int *pcount = (int *)value;
+  //     (*pcount)++;
+  //     continue;
+  //   }
 
-    // Word not found, allocate space for new int and set to 1.
-    int *pcount = malloc(sizeof(int));
-    if (pcount == NULL)
-    {
-      exit_nomem();
-    }
-    *pcount = 1;
-    if (ht_set(counts, word, pcount) == NULL)
-    {
-      exit_nomem();
-    }
-  }
+  //   // Word not found, allocate space for new int and set to 1.
+  //   int *pcount = malloc(sizeof(int));
+  //   if (pcount == NULL)
+  //   {
+  //     exit_nomem();
+  //   }
+  //   *pcount = 1;
+  //   if (ht_set(counts, word, pcount) == NULL)
+  //   {
+  //     exit_nomem();
+  //   }
+  // }
+
+  char *key1;
+  key1 = (char *)malloc(10 * sizeof(char));
+  printf("key: %p\n", key1);
+  strcpy(key1, "9\0");
+
+  char *value1;
+  value1 = (char *)malloc(10 * sizeof(char));
+  printf("value: %p\n", value1);
+  strcpy(value1, "987654321\0");
+
+  char *key2;
+  key2 = (char *)malloc(10 * sizeof(char));
+  printf("key: %p\n", key2);
+  strcpy(key2, "10\0");
+
+  char *value2;
+  value2 = (char *)malloc(10 * sizeof(char));
+  printf("value: %p\n", value2);
+  strcpy(value2, "bar\0");
+
+  char *key3;
+  key3 = (char *)malloc(10 * sizeof(char));
+  printf("key: %p\n", key3);
+  strcpy(key3, "29\0");
+
+  char *value3;
+  value3 = (char *)malloc(10 * sizeof(char));
+  printf("value: %p\n", value3);
+  strcpy(value3, "Hello!\0");
+
+  char *key4;
+  key4 = (char *)malloc(10 * sizeof(char));
+  printf("key: %p\n", key4);
+  strcpy(key4, "And this?\0");
+
+  char *value4;
+  value4 = (char *)malloc(10 * sizeof(char));
+  printf("value: %p\n", value4);
+  strcpy(value4, "Hello!\0");
+
+  ht_set(counts, key1, value1);
+  ht_set(counts, key2, value2);
+  ht_set(counts, key3, value3);
+  ht_set(counts, key4, value4);
+
+  bool deletion = ht_delete(counts, key2);
+  printf("deletion: %d\n", deletion);
+  printf("==========\n");
 
   // Print out words and frequencies, freeing values as we go.
+  printf("iter\n");
   hti it = ht_iterator(counts);
   while (ht_next(&it))
   {
-    printf("%s %d\n", it.key, *(int *)it.value);
-    free(it.value);
+    printf("%s: %s\n", it.key, it.value);
   }
 
-  // Show the number of unique words.
-  printf("%d\n", (int)ht_length(counts));
+  printf("==========\n");
 
+  for (int i = 0; i < 30; i++)
+  {
+    // char s[10];
+    // sprintf(s, "%d", i);
+    // uint64_t hash = hash_key(s);
+    // size_t index = (size_t)(hash & (uint64_t)(INITIAL_CAPACITY - 1));
+    // printf("i: %d, s: '%s', index: %zu\n", i, s, index);
+  }
+
+  printf("==========\n");
+
+  for (int i = 0; i < counts->capacity; i++)
+  {
+    printf("i: %02d, key: '%p', *key: %s, value: '%p', *value: %s\n", i, counts->entries[i].key, counts->entries[i].key, counts->entries[i].value, counts->entries[i].value);
+  }
+
+  printf("==========\n");
+
+  // Show the number of unique words.
+  printf("length: %d\n", (int)ht_length(counts));
+
+  printf("==========\n");
   ht_destroy(counts);
+
+  return 0;
 
   socklen_t client_address_length;
   int server_socket_file_descriptor, client_socket_file_descriptor;
