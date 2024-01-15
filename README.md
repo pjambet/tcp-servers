@@ -4,7 +4,7 @@ Used as a playground, to learn new languages
 
 # List
 
-- [ ] [C](./c) (_Skeleton only_)
+- [X] ✅ [C](./c)
 - [x] ✅ [Clojure](./clojure)
 - [ ] [C++](./cpp) (_Skeleton only_)
 - [ ] [Elixir](./elixir) (_Skeleton only_)
