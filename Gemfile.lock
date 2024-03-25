@@ -21,7 +21,7 @@ GEM
     psych (5.1.2)
       stringio
     rake (13.1.0)
-    rdoc (6.6.2)
+    rdoc (6.6.3.1)
       psych (>= 4.0.0)
     reline (0.4.2)
       io-console (~> 0.5)
@@ -33,6 +33,7 @@ PLATFORMS
   arm64-darwin-22
   arm64-darwin-23
   x86_64-darwin-21
+  x86_64-linux
 
 DEPENDENCIES
   debug
