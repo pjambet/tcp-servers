@@ -3,7 +3,7 @@ const expect = std.testing.expect;
 const net = std.net;
 const fs = std.fs;
 const os = std.os;
-const ArrayList = std.ArrayList;
+const ArrayListUnmanaged = std.ArrayListUnmanaged;
 
 pub const io_mode = .evented;
 
@@ -34,7 +34,7 @@ pub fn main() anyerror!void {
 
     const server_fd = server.stream.handle;
 
-    var pollfds = try std.ArrayList(std.posix.pollfd).initCapacity(allocator, 1);
+    var pollfds = ArrayListUnmanaged(std.posix.pollfd){};
     defer pollfds.deinit(allocator);
 
     var clients = std.AutoArrayHashMap(i32, net.Server.Connection).init(allocator);
@@ -82,9 +82,9 @@ pub fn main() anyerror!void {
                     const msg = buf[0..amt];
                     std.debug.print("received: '{d}'\n", .{amt});
                     std.debug.print("received: '{s}'\n", .{msg});
-                    std.debug.print("received: '{s}'\n", .{msg});
+                    // std.debug.print("received: '{s}'\n", .{msg});
                     var partsIterator = std.mem.splitScalar(u8, msg, ' ');
-                    var parts = try ArrayList([]const u8).initCapacity(allocator, 1);
+                    var parts = ArrayListUnmanaged([]const u8){};
                     defer parts.deinit(allocator);
                     while (partsIterator.next()) |part| {
                         try parts.append(allocator, std.mem.trim(u8, part, "\n\r"));
@@ -114,7 +114,7 @@ pub fn main() anyerror!void {
                         var db_iter = db.iterator();
                         while (db_iter.next()) |pair| {
                             // std.debug.print("key: {s}, value: '{s}'\n", .{ pair.key_ptr, pair.value_ptr });
-                            std.debug.print("key: {s}, value: '{s}'\n", .{ pair.key_ptr.*, pair.value_ptr.* });
+                            std.debug.print("key: '{s}', value: '{s}'\n", .{ pair.key_ptr.*, pair.value_ptr.* });
                             // std.debug.print("key: {d}, value: '{d}'\n", .{ pair.key_ptr.*, pair.value_ptr.* });
                         }
                         const response = db.get(key); // orelse "";
@@ -193,7 +193,7 @@ pub fn main() anyerror!void {
                         if (existing_string_opt) |existing_string| {
                             if (std.fmt.parseInt(i32, existing_string, 10)) |number| {
                                 const new_value = number + 1;
-                                var list = try ArrayList(u8).initCapacity(allocator, 1);
+                                var list = ArrayListUnmanaged(u8){};
                                 defer list.deinit(allocator);
 
                                 _ = try std.fmt.format(list.writer(allocator), "{any}", .{new_value});
@@ -202,7 +202,7 @@ pub fn main() anyerror!void {
                                 defer allocator.free(new_str);
                                 _ = try db.put(key, new_str);
 
-                                var list2 = try ArrayList(u8).initCapacity(allocator, 1);
+                                var list2 = ArrayListUnmanaged(u8){};
                                 defer list2.deinit(allocator);
                                 _ = try std.fmt.format(list2.writer(allocator), "{any}\n", .{new_value});
                                 _ = try conn.stream.write(list2.items);
@@ -225,10 +225,10 @@ pub fn main() anyerror!void {
     }
 
     // Memory leak playground
-    const bytes = try allocator.alloc(u8, 100);
-    defer allocator.free(bytes);
-    const u32_ptr = try allocator.create(u32);
-    defer allocator.destroy(u32_ptr);
+    // const bytes = try allocator.alloc(u8, 100);
+    // defer allocator.free(bytes);
+    // const u32_ptr = try allocator.create(u32);
+    // defer allocator.destroy(u32_ptr);
 }
 
 // test "simple test" {
